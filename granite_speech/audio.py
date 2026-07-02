@@ -11,7 +11,7 @@ from .errors import AudioDecodeError, InvalidArgumentError
 
 SAMPLE_RATE = 16000
 DEFAULT_MAX_AUDIO_SECONDS = 4 * 60 * 60
-MAX_AUDIO_SECONDS_ENV = "GRANITE_SPEECH_MAX_AUDIO_SECONDS"
+ENV_MAX_AUDIO_SECONDS = "GRANITE_SPEECH_MAX_AUDIO_SECONDS"
 
 
 @dataclass(frozen=True)
@@ -170,20 +170,20 @@ def _validate_duration(
     if duration > limit:
         raise AudioDecodeError(
             f"decoded audio duration {duration:.1f}s exceeds granite-speech limit "
-            f"{limit:.1f}s; set {MAX_AUDIO_SECONDS_ENV}=0 to disable or raise the cap"
+            f"{limit:.1f}s; set {ENV_MAX_AUDIO_SECONDS}=0 to disable or raise the cap"
         )
 
 
 def _resolved_max_audio_seconds(value: float | None) -> float | None:
     if value is not None:
         return value
-    raw = os.environ.get(MAX_AUDIO_SECONDS_ENV)
+    raw = os.environ.get(ENV_MAX_AUDIO_SECONDS)
     if raw is None:
         return float(DEFAULT_MAX_AUDIO_SECONDS)
     try:
         parsed = float(raw)
     except ValueError as exc:
-        raise InvalidArgumentError(f"{MAX_AUDIO_SECONDS_ENV} must be a number") from exc
+        raise InvalidArgumentError(f"{ENV_MAX_AUDIO_SECONDS} must be a number") from exc
     if parsed == 0:
         return None
     return parsed

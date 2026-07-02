@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 def normalize_word(word: str) -> str:
@@ -13,37 +13,6 @@ def normalize_word(word: str) -> str:
     while end > start and not word[end - 1].isalnum():
         end -= 1
     return word[start:end].casefold()
-
-
-def common_prefix_count(left: Sequence[str], right: Sequence[str]) -> int:
-    count = 0
-    limit = min(len(left), len(right))
-    while count < limit and normalize_word(left[count]) == normalize_word(right[count]):
-        count += 1
-    return count
-
-
-@dataclass
-class LocalAgreementReconciler:
-    confirmed: list[str] = field(default_factory=list)
-    _previous_hypothesis: list[str] = field(default_factory=list)
-
-    def update(self, hypothesis: Sequence[str]) -> tuple[list[str], list[str]]:
-        words = list(hypothesis)
-        agreed_count = common_prefix_count(self._previous_hypothesis, words)
-        if agreed_count > len(self.confirmed):
-            self.confirmed.extend(words[len(self.confirmed) : agreed_count])
-        self._previous_hypothesis = words
-        return list(self.confirmed), words[len(self.confirmed) :]
-
-    def finalize(self, words: Sequence[str]) -> list[str]:
-        self.confirmed = list(words)
-        self._previous_hypothesis = list(words)
-        return list(self.confirmed)
-
-    def reset(self) -> None:
-        self.confirmed = []
-        self._previous_hypothesis = []
 
 
 @dataclass(frozen=True)
@@ -105,6 +74,28 @@ def find_boundary_agreement(
     *,
     overlap_fraction: float,
 ) -> BoundaryAgreement | None:
+    """Find where two adjacent chunks agree within their overlap edges.
+
+    Adjacent windows overlap in the audio, so the tail of ``previous`` and the
+    head of ``current`` should transcribe the same words. This searches those
+    two edge regions (``edge_word_count`` words on each side) for the longest
+    normalized-word match, allowing some unstable words to be skipped at the
+    immediate seam before the match begins.
+
+    The search is brute force: for every combination of words dropped from the
+    previous tail (``previous_drop``) and the current head (``current_drop``),
+    it takes the longest run that agrees under :func:`normalize_word`. Among all
+    matches it prefers, in order: the longest span, then the fewest total edge
+    words dropped, then the fewest dropped from the previous side, then from the
+    current side. Longer agreements are more trustworthy; dropping fewer words
+    keeps more of the transcript.
+
+    Returns the winning :class:`BoundaryAgreement`, or ``None`` if the edges
+    never agree (the caller then falls back to dropping both full edges).
+    ``previous_end`` / ``current_end`` are the cut points the caller uses;
+    ``length`` / ``previous_drop`` / ``current_drop`` describe how the match was
+    found and make the search result introspectable (see the tests).
+    """
     previous_edge = edge_word_count(previous, overlap_fraction)
     current_edge = edge_word_count(current, overlap_fraction)
     best: BoundaryAgreement | None = None

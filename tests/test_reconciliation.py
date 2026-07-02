@@ -1,37 +1,10 @@
 from __future__ import annotations
 
 from granite_speech.reconciliation import (
-    LocalAgreementReconciler,
     find_boundary_agreement,
     normalize_word,
     reconcile_overlapping_chunks,
 )
-
-
-def test_local_agreement_commits_only_consecutive_common_prefix():
-    reconciler = LocalAgreementReconciler()
-
-    assert reconciler.update(["The", "cat", "sat"]) == ([], ["The", "cat", "sat"])
-    assert reconciler.update(["the", "cat,", "sleeps"]) == (
-        ["the", "cat,"],
-        ["sleeps"],
-    )
-    assert reconciler.update(["the", "cat", "sleeps", "now"]) == (
-        ["the", "cat,", "sleeps"],
-        ["now"],
-    )
-
-
-def test_local_agreement_finalize_and_reset():
-    reconciler = LocalAgreementReconciler()
-
-    assert reconciler.finalize(["final", "words"]) == ["final", "words"]
-    assert reconciler.confirmed == ["final", "words"]
-
-    reconciler.reset()
-
-    assert reconciler.confirmed == []
-    assert reconciler.update(["fresh"]) == ([], ["fresh"])
 
 
 def test_normalize_word_strips_edge_punctuation_and_uses_casefold():

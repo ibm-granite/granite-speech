@@ -430,7 +430,6 @@ wheels = [
 
 [[package]]
 name = "granite-speech"
-version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "huggingface-hub" },
@@ -438,13 +437,10 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
     { name = "numpy", version = "2.5.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "packaging" },
-    { name = "peft" },
-    { name = "safetensors" },
     { name = "soundfile" },
     { name = "torch" },
     { name = "torchaudio" },
     { name = "tqdm" },
-    { name = "transformers" },
 ]
 
 [package.optional-dependencies]
@@ -456,6 +452,11 @@ dev = [
 mlx = [
     { name = "mlx-audio" },
 ]
+transformers = [
+    { name = "peft" },
+    { name = "safetensors" },
+    { name = "transformers" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -463,18 +464,18 @@ requires-dist = [
     { name = "mlx-audio", marker = "extra == 'mlx'" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "packaging", specifier = ">=23" },
-    { name = "peft", specifier = ">=0.11" },
+    { name = "peft", marker = "extra == 'transformers'", specifier = ">=0.11" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
-    { name = "safetensors", specifier = ">=0.4.3" },
+    { name = "safetensors", marker = "extra == 'transformers'", specifier = ">=0.4.3" },
     { name = "soundfile", specifier = ">=0.12.1" },
     { name = "torch", specifier = ">=2.2" },
     { name = "torchaudio", specifier = ">=2.2" },
     { name = "tqdm", specifier = ">=4.66" },
-    { name = "transformers", specifier = ">=5.8" },
+    { name = "transformers", marker = "extra == 'transformers'", specifier = ">=5.8" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=6.2.0" },
 ]
-provides-extras = ["dev", "mlx"]
+provides-extras = ["transformers", "dev", "mlx"]
 
 [[package]]
 name = "h11"
