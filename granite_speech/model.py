@@ -20,6 +20,7 @@ from .chunking import ChunkingOptions, join_text, transcribe_chunks
 from .errors import InvalidArgumentError
 from .prompts import PROMPT_MODES, build_prompt, normalize_keyword_biases
 from .segmenter import validate_chunk_geometry, validate_vad_options
+from .types import TranscriptionResult
 
 _WHISPER_DEFAULT_ONLY_OPTIONS = {
     "compression_ratio_threshold": 2.4,
@@ -98,7 +99,7 @@ class GraniteSpeechModel:
         fp16: bool | None = None,
         clip_timestamps: str | Iterable[float] | Iterable[tuple[float, float]] | None = None,
         **whisper_options: Any,
-    ) -> dict:
+    ) -> TranscriptionResult:
         prompt, prompt_mode, num_beams, temperature = _resolve_whisper_compat_options(
             prompt=prompt,
             prompt_mode=prompt_mode,
@@ -169,7 +170,7 @@ class GraniteSpeechModel:
             options=chunk_options,
             clip_spans=clip_spans,
         )
-        result = {
+        result: TranscriptionResult = {
             "text": chunk_result["text"],
             "segments": chunk_result["segments"],
             "language": language,

@@ -10,7 +10,12 @@ from ._backends import Backend, GenerateRequest
 from .errors import InvalidArgumentError, TranscriptionError
 from .plus_output import join_text, parse_plus_output
 from .reconciliation import reconcile_overlapping_chunks
-from .segmenter import FixedWindowSegmenter, VadSegmenter, segment_boundaries
+from .segmenter import (
+    AudioSegment,
+    FixedWindowSegmenter,
+    VadSegmenter,
+    segment_boundaries,
+)
 
 DEFAULT_MAX_NEW_TOKENS = 200
 DEFAULT_TOKEN_BUDGET_SECONDS = 30.0
@@ -76,11 +81,72 @@ def transcribe_chunks(
         )
         chunk_length = cap
 
+    windows, boundary_overlap = _select_windows(wav, sample_rate, chunk_length, options)
+
+    duration = wav.shape[-1] / sample_rate if sample_rate else 0.0
+    boundaries = segment_boundaries(windows, chunk_overlap=boundary_overlap, duration=duration)
+
+    segments = _generate_segments(
+        wav,
+        windows=windows,
+        boundaries=boundaries,
+        backend=backend,
+        sample_rate=sample_rate,
+        chunk_length=chunk_length,
+        options=options,
+        warnings=warnings,
+    )
+
+    if segments and all("error" in segment for segment in segments):
+        raise TranscriptionError("every audio window failed during transcription")
+
+    if boundary_overlap > 0:
+        reconcile_successful_segments(
+            segments,
+            overlap_fraction=options.chunk_overlap / chunk_length,
+        )
+
+    all_words, all_speakers = apply_structured_output_parsing(
+        segments,
+        prompt_mode=options.prompt_mode,
+    )
+
+    if options.verbose:
+        for segment in segments:
+            if "error" not in segment:
+                print(segment["text"], file=sys.stderr, flush=True)
+
+    text = join_text(segment["text"] for segment in segments if "error" not in segment)
+    result = {
+        "text": text,
+        "segments": segments,
+        "warnings": warnings,
+    }
+    if options.prompt_mode == "word_timestamps" or all_words:
+        result["words"] = all_words
+    if options.prompt_mode == "speaker_attributed" or all_speakers:
+        result["speakers"] = all_speakers
+    return result
+
+
+def _select_windows(
+    wav: np.ndarray,
+    sample_rate: int,
+    chunk_length: float,
+    options: ChunkingOptions,
+) -> tuple[list[AudioSegment], float]:
+    """Segment the waveform per ``options.segmentation`` and report the boundary overlap.
+
+    Returns the windows plus the overlap (in seconds) used when computing segment
+    boundaries: ``chunk_overlap`` for fixed windows, ``0.0`` for VAD (which forbids
+    ``chunk_overlap``). Raises ``InvalidArgumentError`` for an unknown mode.
+    """
     if options.segmentation == "fixed":
-        segmenter = FixedWindowSegmenter(chunk_length, options.chunk_overlap)
-        windows = segmenter.segment(wav, sample_rate)
-        boundary_overlap = options.chunk_overlap
-    elif options.segmentation == "vad":
+        segmenter: FixedWindowSegmenter | VadSegmenter = FixedWindowSegmenter(
+            chunk_length, options.chunk_overlap
+        )
+        return segmenter.segment(wav, sample_rate), options.chunk_overlap
+    if options.segmentation == "vad":
         if options.chunk_overlap > 0:
             raise InvalidArgumentError("chunk_overlap is only supported with segmentation='fixed'")
         segmenter = VadSegmenter(
@@ -90,16 +156,28 @@ def transcribe_chunks(
             min_silence_duration=options.vad_min_silence_duration,
             speech_pad=options.vad_speech_pad,
         )
-        windows = segmenter.segment(wav, sample_rate)
-        boundary_overlap = 0.0
-    else:
-        raise InvalidArgumentError("segmentation must be either 'fixed' or 'vad'")
+        return segmenter.segment(wav, sample_rate), 0.0
+    raise InvalidArgumentError("segmentation must be either 'fixed' or 'vad'")
 
-    duration = wav.shape[-1] / sample_rate if sample_rate else 0.0
-    boundaries = segment_boundaries(windows, chunk_overlap=boundary_overlap, duration=duration)
 
+def _generate_segments(
+    wav: np.ndarray,
+    *,
+    windows: list[AudioSegment],
+    boundaries: list[tuple[float, float]],
+    backend: Backend,
+    sample_rate: int,
+    chunk_length: float,
+    options: ChunkingOptions,
+    warnings: list[dict],
+) -> list[dict]:
+    """Generate one segment per window, capturing failures as per-window warnings.
+
+    Each window is generated independently; a window that raises becomes a segment
+    with an ``error`` field and a matching ``window_error`` entry appended to
+    ``warnings`` (mutated in place) rather than aborting the whole run.
+    """
     segments: list[dict] = []
-
     for segment_id, (window, (seg_start, seg_end)) in enumerate(
         zip(windows, boundaries, strict=True)
     ):
@@ -147,37 +225,7 @@ def transcribe_chunks(
             segments.append(segment)
             warning = {"type": "window_error", **segment}
             warnings.append(warning)
-
-    if segments and all("error" in segment for segment in segments):
-        raise TranscriptionError("every audio window failed during transcription")
-
-    if boundary_overlap > 0:
-        reconcile_successful_segments(
-            segments,
-            overlap_fraction=options.chunk_overlap / chunk_length,
-        )
-
-    all_words, all_speakers = apply_structured_output_parsing(
-        segments,
-        prompt_mode=options.prompt_mode,
-    )
-
-    if options.verbose:
-        for segment in segments:
-            if "error" not in segment:
-                print(segment["text"], file=sys.stderr, flush=True)
-
-    text = join_text(segment["text"] for segment in segments if "error" not in segment)
-    result = {
-        "text": text,
-        "segments": segments,
-        "warnings": warnings,
-    }
-    if options.prompt_mode == "word_timestamps" or all_words:
-        result["words"] = all_words
-    if options.prompt_mode == "speaker_attributed" or all_speakers:
-        result["speakers"] = all_speakers
-    return result
+    return segments
 
 
 def resolve_max_new_tokens(max_new_tokens: int | None, chunk_length: float) -> int:

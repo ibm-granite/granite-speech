@@ -103,6 +103,10 @@ The segment `id` and `temperature` fields are included as Whisper-familiar compa
 Granite Speech does not fabricate Whisper confidence fields such as `avg_logprob`,
 `compression_ratio`, or `no_speech_prob`.
 
+This shape is available as an importable `TypedDict` for type-checking your own code:
+`from granite_speech import TranscriptionResult` (also `Segment`, `Word`, `Speaker`, `Warning`).
+It is documentation only — results are plain `dict`s at runtime.
+
 For translation, pass an explicit source language. If `target_language` is omitted, it defaults to
 English:
 

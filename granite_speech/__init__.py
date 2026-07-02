@@ -17,6 +17,7 @@ from .errors import (
 )
 from .loader import load_model
 from .model import GraniteSpeechModel
+from .types import Segment, Speaker, TranscriptionResult, Warning, Word
 from .version import __version__
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
@@ -53,7 +54,7 @@ def transcribe(
     fp16: bool | None = None,
     clip_timestamps: str | Iterable[float] | Iterable[tuple[float, float]] | None = None,
     **whisper_options: Any,
-) -> dict:
+) -> TranscriptionResult:
     loaded = _get_cached_model(model)
     return loaded.transcribe(
         audio,
@@ -105,4 +106,9 @@ __all__ = [
     "AudioDecodeError",
     "InvalidArgumentError",
     "TranscriptionError",
+    "TranscriptionResult",
+    "Segment",
+    "Word",
+    "Speaker",
+    "Warning",
 ]
