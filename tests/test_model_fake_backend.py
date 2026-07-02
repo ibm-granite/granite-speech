@@ -256,7 +256,9 @@ def test_clip_timestamps_transcribes_selected_ranges_with_original_offsets():
     )
 
     assert result["text"] == "first clip second clip"
-    assert [(segment["id"], segment["start"], segment["end"]) for segment in result["segments"]] == [
+    assert [
+        (segment["id"], segment["start"], segment["end"]) for segment in result["segments"]
+    ] == [
         (0, 2.0, 4.0),
         (1, 6.0, 7.0),
     ]

@@ -8,7 +8,7 @@ import numpy as np
 
 from ._backends import Backend, GenerateRequest
 from .errors import InvalidArgumentError, TranscriptionError
-from .plus_output import parse_plus_output
+from .plus_output import join_text, parse_plus_output
 from .reconciliation import reconcile_overlapping_chunks
 from .segmenter import FixedWindowSegmenter, VadSegmenter, segment_boundaries
 
@@ -172,10 +172,6 @@ def resolve_max_new_tokens(max_new_tokens: int | None, chunk_length: float) -> i
         return max_new_tokens
     scale = max(1.0, chunk_length / DEFAULT_TOKEN_BUDGET_SECONDS)
     return int(ceil(DEFAULT_MAX_NEW_TOKENS * scale))
-
-
-def join_text(parts) -> str:
-    return " ".join(part.strip() for part in parts if part and part.strip()).strip()
 
 
 def reconcile_successful_segments(segments: list[dict], *, overlap_fraction: float) -> None:

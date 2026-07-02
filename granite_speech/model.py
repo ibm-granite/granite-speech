@@ -214,7 +214,9 @@ class GraniteSpeechModel:
         validate_chunk_geometry(chunk_length, chunk_overlap)
         if segmentation == "vad":
             if chunk_overlap > 0:
-                raise InvalidArgumentError("chunk_overlap is only supported with segmentation='fixed'")
+                raise InvalidArgumentError(
+                    "chunk_overlap is only supported with segmentation='fixed'"
+                )
             validate_vad_options(
                 chunk_length=chunk_length,
                 threshold=vad_threshold,
@@ -227,7 +229,9 @@ class GraniteSpeechModel:
         if num_beams < 1:
             raise InvalidArgumentError("num_beams must be greater than or equal to 1")
         if self.backend.name == "llama.cpp" and num_beams != 1:
-            raise InvalidArgumentError("llama.cpp backend does not support num_beams; use num_beams=1")
+            raise InvalidArgumentError(
+                "llama.cpp backend does not support num_beams; use num_beams=1"
+            )
         if temperature < 0.0:
             raise InvalidArgumentError("temperature must be greater than or equal to 0")
         if temperature > 0.0 and num_beams > 1:

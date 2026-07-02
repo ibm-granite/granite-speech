@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
 
 import numpy as np
 
@@ -14,10 +13,6 @@ class AudioSegment:
     end: float
     start_sample: int
     end_sample: int
-
-
-class Segmenter(Protocol):
-    def segment(self, wav: np.ndarray, sample_rate: int) -> list[AudioSegment]: ...
 
 
 @dataclass(frozen=True)
@@ -221,7 +216,9 @@ def _mono_samples(wav: np.ndarray) -> np.ndarray:
         if audio.shape[0] == 1:
             return audio[0]
         return audio.mean(axis=0, dtype=np.float32)
-    raise InvalidArgumentError(f"audio window must be mono or channel-first, got shape {audio.shape}")
+    raise InvalidArgumentError(
+        f"audio window must be mono or channel-first, got shape {audio.shape}"
+    )
 
 
 def _rms(frame: np.ndarray) -> float:

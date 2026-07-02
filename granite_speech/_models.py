@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .errors import InvalidArgumentError
@@ -21,7 +21,6 @@ class ModelSpec:
     supports_translation: bool
     supports_word_timing_output: bool
     supports_speaker_attribution_output: bool
-    punctuation_caps: bool
     prompt_profile: str = "base"
 
 
@@ -103,7 +102,6 @@ MODELS = {
         supports_translation=True,
         supports_word_timing_output=False,
         supports_speaker_attribution_output=False,
-        punctuation_caps=True,
     ),
     "granite-speech-4.1-2b-plus": ModelSpec(
         name="granite-speech-4.1-2b-plus",
@@ -117,7 +115,6 @@ MODELS = {
         supports_translation=False,
         supports_word_timing_output=True,
         supports_speaker_attribution_output=True,
-        punctuation_caps=False,
         prompt_profile="plus",
     ),
 }
@@ -171,7 +168,10 @@ def resolve_model_spec(name: str | Path) -> ModelSpec:
             else MODELS["granite-speech-4.1-2b"]
         )
         has_llama_cpp_files = _looks_like_llama_cpp_path(path)
-        return ModelSpec(
+        # Same capabilities as the inferred base spec, but pointed at the local
+        # path; drop the llama.cpp references when the path has no GGUF files.
+        return replace(
+            inferred,
             name=raw_name,
             repo_id=str(path),
             llama_cpp_repo_id=str(path) if has_llama_cpp_files else None,
@@ -179,14 +179,6 @@ def resolve_model_spec(name: str | Path) -> ModelSpec:
                 inferred.llama_cpp_model_file_template if has_llama_cpp_files else None
             ),
             llama_cpp_mmproj_file=inferred.llama_cpp_mmproj_file if has_llama_cpp_files else None,
-            source_languages=inferred.source_languages,
-            translation_pairs=inferred.translation_pairs,
-            supports_asr=inferred.supports_asr,
-            supports_translation=inferred.supports_translation,
-            supports_word_timing_output=inferred.supports_word_timing_output,
-            supports_speaker_attribution_output=inferred.supports_speaker_attribution_output,
-            punctuation_caps=inferred.punctuation_caps,
-            prompt_profile=inferred.prompt_profile,
         )
 
     choices = ", ".join(available_models())

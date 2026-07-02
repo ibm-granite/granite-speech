@@ -4,11 +4,11 @@ import os
 import re
 import subprocess
 import tempfile
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
-from . import BackendCapabilities, GenerateRequest, GenerateResult
+from . import BackendCapabilities, GenerateRequest, GenerateResult, require_sample_rate
 
 
 class LlamaCppBackend:
@@ -32,13 +32,14 @@ class LlamaCppBackend:
         self.timeout = timeout
 
     def generate(self, req: GenerateRequest) -> GenerateResult:
-        if req.sample_rate != 16000:
-            raise ValueError(f"GenerateRequest.sample_rate must be 16000, got {req.sample_rate}")
+        require_sample_rate(req.sample_rate)
         if req.num_beams != 1:
             raise ValueError("llama.cpp backend does not support beam search; use num_beams=1")
 
         prompt = req.instruction or _strip_audio_token(req.prompt)
-        with tempfile.NamedTemporaryFile(suffix=".wav", prefix="granite-speech-", delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(
+            suffix=".wav", prefix="granite-speech-", delete=False
+        ) as tmp:
             audio_path = tmp.name
         try:
             _write_wav(audio_path, req.wav, req.sample_rate)

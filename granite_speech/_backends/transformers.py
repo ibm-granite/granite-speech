@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import BackendCapabilities, GenerateRequest, GenerateResult
+from . import BackendCapabilities, GenerateRequest, GenerateResult, require_sample_rate
 
 
 class TransformersBackend:
+    """Backend that runs Granite Speech through Hugging Face transformers.
+
+    Reserved for future use; not yet reachable from ``load_model``, which routes
+    every model to the llama.cpp backend. It will be wired in when a model that
+    requires transformers (and cannot run on llama.cpp) ships. Its dependencies
+    live in the optional ``granite-speech[transformers]`` extra.
+    """
+
     name = "transformers"
 
     def __init__(
@@ -23,8 +31,7 @@ class TransformersBackend:
         self.capabilities = capabilities
 
     def generate(self, req: GenerateRequest) -> GenerateResult:
-        if req.sample_rate != 16000:
-            raise ValueError(f"GenerateRequest.sample_rate must be 16000, got {req.sample_rate}")
+        require_sample_rate(req.sample_rate)
 
         import torch
 
@@ -50,7 +57,11 @@ class TransformersBackend:
         with torch.no_grad():
             output_ids = self.model.generate(**inputs, **generation_kwargs)
 
-        input_ids = inputs.get("input_ids") if isinstance(inputs, dict) else getattr(inputs, "input_ids", None)
+        input_ids = (
+            inputs.get("input_ids")
+            if isinstance(inputs, dict)
+            else getattr(inputs, "input_ids", None)
+        )
         if input_ids is not None and output_ids.ndim == 2:
             output_ids = output_ids[:, input_ids.shape[-1] :]
 

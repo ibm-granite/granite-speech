@@ -12,7 +12,6 @@ import pytest
 
 import granite_speech
 
-
 pytestmark = pytest.mark.real_weights
 
 SMOKE_AUDIO_REPO_ID = "ibm-granite/granite-speech-4.1-2b"

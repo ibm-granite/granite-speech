@@ -32,11 +32,15 @@ def load_audio(
 ) -> AudioData:
     if isinstance(audio, (str, Path)):
         if sample_rate is not None:
-            raise InvalidArgumentError("sample_rate is inferred for path inputs and must not be set")
+            raise InvalidArgumentError(
+                "sample_rate is inferred for path inputs and must not be set"
+            )
         wav, sr = _load_audio_path(Path(audio))
     else:
         if sample_rate is None:
-            raise InvalidArgumentError("sample_rate is required for raw array or tensor audio input")
+            raise InvalidArgumentError(
+                "sample_rate is required for raw array or tensor audio input"
+            )
         wav = _array_to_channels_first(audio)
         sr = sample_rate
 

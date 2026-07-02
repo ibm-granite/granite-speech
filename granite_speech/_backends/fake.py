@@ -17,7 +17,9 @@ class FakeBackend:
         capabilities: BackendCapabilities | None = None,
     ) -> None:
         self._responses = responses
-        self._response_list = list(responses) if responses is not None and not callable(responses) else None
+        self._response_list = (
+            list(responses) if responses is not None and not callable(responses) else None
+        )
         self.calls: list[GenerateRequest] = []
         self.capabilities = capabilities or BackendCapabilities(
             max_reliable_audio_seconds=None,

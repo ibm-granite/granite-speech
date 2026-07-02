@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 
@@ -80,7 +81,7 @@ def parse_word_timestamp_output(text: str, *, segment_start: float = 0.0) -> Par
     return ParsedPlusOutput(text=cleaned, raw_text=text, words=words)
 
 
-def join_text(parts) -> str:
+def join_text(parts: Iterable[str]) -> str:
     return " ".join(part.strip() for part in parts if part and part.strip()).strip()
 
 

@@ -15,7 +15,6 @@ import numpy as np
 import granite_speech
 from granite_speech.errors import GraniteSpeechError
 
-
 DEFAULT_MODEL = "granite-speech-4.1-2b"
 DEFAULT_SAMPLE_RATE = 16000
 
@@ -30,8 +29,6 @@ def _import_pipecat() -> dict[str, Any]:
         from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
         from fastapi.responses import RedirectResponse
         from loguru import logger
-        from pipecat_ai_small_webrtc_prebuilt.frontend import SmallWebRTCPrebuiltUI
-
         from pipecat.audio.vad.silero import SileroVADAnalyzer
         from pipecat.audio.vad.vad_analyzer import VADParams
         from pipecat.frames.frames import ErrorFrame, Frame, TranscriptionFrame
@@ -50,6 +47,7 @@ def _import_pipecat() -> dict[str, Any]:
         from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
         from pipecat.utils.time import time_now_iso8601
         from pipecat.workers.runner import WorkerRunner
+        from pipecat_ai_small_webrtc_prebuilt.frontend import SmallWebRTCPrebuiltUI
     except ImportError as exc:
         raise MissingPipecatDependency(
             "Install the example dependencies with `cd examples && uv sync`."

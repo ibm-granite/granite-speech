@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import warnings
 import shutil
+import warnings
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from ._backends import BackendCapabilities
 from ._backends.llama_cpp import LlamaCppBackend
@@ -58,6 +59,13 @@ def _load_transformers_model(
     local_files_only: bool,
     trust_remote_code: bool,
 ) -> GraniteSpeechModel:
+    """Load a Granite Speech model through the transformers backend.
+
+    Reserved for future use; not yet reachable from ``load_model``, which routes
+    every model to the llama.cpp backend. It will be wired in when a model that
+    requires transformers (and cannot run on llama.cpp) ships. Its dependencies
+    live in the optional ``granite-speech[transformers]`` extra.
+    """
     _check_transformers_version()
 
     try:
@@ -67,8 +75,9 @@ def _load_transformers_model(
         raise
     except Exception as exc:
         raise ModelLoadError(
-            "loading Granite Speech requires torch and transformers; install granite-speech "
-            "with its base dependencies"
+            "loading Granite Speech through the transformers backend requires torch and "
+            "transformers; install the optional extra with "
+            "`pip install granite-speech[transformers]`"
         ) from exc
 
     resolved_device = _resolve_device(device, torch)
@@ -130,7 +139,9 @@ def download_model(
     try:
         from huggingface_hub import snapshot_download
     except Exception as exc:
-        raise ModelLoadError("huggingface_hub is required to download Granite Speech models") from exc
+        raise ModelLoadError(
+            "huggingface_hub is required to download Granite Speech models"
+        ) from exc
 
     cache_dir = resolve_cache_dir(download_root)
     try:
@@ -141,7 +152,9 @@ def download_model(
             local_files_only=local_files_only,
         )
     except Exception as exc:
-        raise ModelLoadError(f"failed to download Granite Speech model {spec.name!r}: {exc}") from exc
+        raise ModelLoadError(
+            f"failed to download Granite Speech model {spec.name!r}: {exc}"
+        ) from exc
 
 
 def download_llama_cpp_model(
@@ -360,7 +373,10 @@ def _check_transformers_version() -> None:
 
         installed = version("transformers")
     except PackageNotFoundError as exc:
-        raise ModelLoadError("transformers is required to load Granite Speech models") from exc
+        raise ModelLoadError(
+            "the transformers backend requires transformers; install the optional extra "
+            "with `pip install granite-speech[transformers]`"
+        ) from exc
 
     try:
         from packaging.version import Version

@@ -5,8 +5,8 @@ import pytest
 
 from granite_speech._backends import BackendCapabilities
 from granite_speech._backends.fake import FakeBackend
-from granite_speech.errors import InvalidArgumentError
 from granite_speech.chunking import ChunkingOptions, resolve_max_new_tokens, transcribe_chunks
+from granite_speech.errors import InvalidArgumentError
 
 
 def options(**overrides) -> ChunkingOptions:

@@ -26,9 +26,6 @@ classifiers = [
 dependencies = [
   "torch>=2.2",
   "torchaudio>=2.2",
-  "transformers>=5.8",
-  "peft>=0.11",
-  "safetensors>=0.4.3",
   "soundfile>=0.12.1",
   "huggingface_hub>=0.23",
   "numpy>=1.24",
@@ -37,6 +34,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Reserved for future use: the transformers backend is not yet reachable from
+# load_model(). Install with `granite-speech[transformers]` once a model that
+# requires it ships.
+transformers = [
+  "transformers>=5.8",
+  "peft>=0.11",
+  "safetensors>=0.4.3",
+]
 dev = [
   "pytest>=8",
   "ruff>=0.5",
@@ -64,3 +69,6 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
