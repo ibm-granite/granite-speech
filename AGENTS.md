@@ -21,6 +21,10 @@ live in `examples/`, which has its own `pyproject.toml`.
 
 ## Build, Test, and Development Commands
 
+Use `uv` for all Python commands: run tools and scripts through `uv run` (e.g. `uv run pytest`,
+`uv run python ...`) and manage the environment with `uv sync` / `uv pip` rather than a bare
+`python`, `pip`, or a manually activated virtualenv. This keeps everyone on the locked dependency set.
+
 - `uv sync --extra dev`: create or update the local development environment with pytest, Ruff, and
   Twine.
 - `uv run pytest -m "not real_weights"`: run the normal unit test suite; this is the GitHub Actions

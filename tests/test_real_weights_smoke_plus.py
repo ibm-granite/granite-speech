@@ -76,6 +76,7 @@ def test_plus_model_llama_cpp_real_weights_smoke(smoke_model, smoke_audio_path):
     result = _transcribe_without_package_warnings(smoke_model, smoke_audio_path)
 
     _assert_successful_smoke_result(result)
+    _report("plus ASR", result)
 
 
 def test_plus_model_word_timestamps_real_weights_smoke(smoke_model, smoke_audio_path):
@@ -88,6 +89,7 @@ def test_plus_model_word_timestamps_real_weights_smoke(smoke_model, smoke_audio_
     )
 
     _assert_successful_smoke_result(result)
+    _report("plus word timestamps", result)
     words = result.get("words")
     assert words, "expected word-timestamp output for the plus model"
     # Timestamps are window-relative, so starts reset at each window boundary; assert per-word
@@ -106,6 +108,7 @@ def test_plus_model_speaker_attribution_real_weights_smoke(smoke_model, smoke_au
     )
 
     _assert_successful_smoke_result(result)
+    _report("plus speaker attribution", result)
     assert "speakers" in result
     for turn in result["speakers"]:
         assert set(turn) >= {"speaker", "text"}
@@ -128,6 +131,7 @@ def test_plus_model_incremental_decoding_real_weights_smoke(smoke_model, smoke_a
         clip_timestamps="0,30",
     )
     _assert_successful_smoke_result(seed)
+    _report("plus incremental seed (0-30s)", seed)
     assert seed["text"].strip()
 
     continued = _transcribe_without_package_warnings(
@@ -139,6 +143,7 @@ def test_plus_model_incremental_decoding_real_weights_smoke(smoke_model, smoke_a
     )
 
     _assert_successful_smoke_result(continued)
+    _report("plus incremental continued (0-60s)", continued)
     assert "speakers" in continued
     for turn in continued["speakers"]:
         assert set(turn) >= {"speaker", "text"}
@@ -169,6 +174,26 @@ def _assert_successful_smoke_result(result: dict) -> None:
     assert result["warnings"] == []
     assert result["segments"]
     assert result["text"].strip()
+
+
+def _report(label: str, result: dict) -> None:
+    # Print the transcription so a manual smoke run (pytest -s) shows what the model produced,
+    # not just pass/fail. Kept to stdout rather than logging so it is visible without extra flags.
+    print(f"\n--- {label} ---")
+    print(f"segments: {len(result.get('segments') or [])}")
+    print(f"text: {result['text'].strip()}")
+    speakers = result.get("speakers")
+    if speakers:
+        print("speakers:")
+        for turn in speakers:
+            print(f"  [{turn.get('speaker')}] {turn.get('text', '').strip()}")
+    words = result.get("words")
+    if words:
+        formatted = " ".join(
+            f"{entry.get('word', '').strip()}({entry.get('start')}-{entry.get('end')})"
+            for entry in words
+        )
+        print(f"words: {formatted}")
 
 
 def _smoke_audio_path() -> Path:

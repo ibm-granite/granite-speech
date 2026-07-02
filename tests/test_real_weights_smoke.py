@@ -77,6 +77,7 @@ def test_base_model_llama_cpp_real_weights_smoke(smoke_model, smoke_audio_path):
     result = _transcribe_without_package_warnings(smoke_model, smoke_audio_path)
 
     _assert_successful_smoke_result(result)
+    _report("base ASR", result)
     if expected_text:
         assert _close_enough(
             result["text"],
@@ -95,6 +96,7 @@ def test_base_model_llama_cpp_translation_real_weights_smoke(smoke_model, smoke_
     )
 
     _assert_successful_smoke_result(result)
+    _report("base translate (fr->en)", result)
     assert result["language"] == "fr"
     assert result["target_language"] == "en"
     expected_text = os.environ.get(
@@ -121,6 +123,18 @@ def _assert_successful_smoke_result(result: dict) -> None:
     assert result["warnings"] == []
     assert result["segments"]
     assert result["text"].strip()
+
+
+def _report(label: str, result: dict) -> None:
+    # Print the transcription so a manual smoke run (pytest -s) shows what the model produced,
+    # not just pass/fail. Kept to stdout rather than logging so it is visible without extra flags.
+    print(f"\n--- {label} ---")
+    language = result.get("language")
+    target = result.get("target_language")
+    if language:
+        print(f"language: {language}" + (f" -> {target}" if target else ""))
+    print(f"segments: {len(result.get('segments') or [])}")
+    print(f"text: {result['text'].strip()}")
 
 
 def _smoke_audio_path(*, cache_dir: str | None, local_files_only: bool) -> Path:

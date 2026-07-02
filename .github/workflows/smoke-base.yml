@@ -93,4 +93,5 @@ jobs:
           key: hf-weights-granite-speech-4.1-2b
 
       - name: Run base real-weights smoke
-        run: uv run pytest tests/test_real_weights_smoke.py -m real_weights -v
+        # -s so the transcription output (text/segments/language) shows in the Actions log.
+        run: uv run pytest tests/test_real_weights_smoke.py -m real_weights -v -s

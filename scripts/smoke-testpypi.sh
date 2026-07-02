@@ -67,12 +67,13 @@ esac
 
 run_base() {
   echo "== base real-weights smoke =="
-  "${venv_python}" -m pytest tests/test_real_weights_smoke.py -m real_weights -v
+  # -s so the tests' transcription output (text/segments/language) is shown, not just pass/fail.
+  "${venv_python}" -m pytest tests/test_real_weights_smoke.py -m real_weights -v -s
 }
 
 run_plus() {
   echo "== plus real-weights smoke =="
-  "${venv_python}" -m pytest tests/test_real_weights_smoke_plus.py -m real_weights -v
+  "${venv_python}" -m pytest tests/test_real_weights_smoke_plus.py -m real_weights -v -s
 }
 
 case "${suite}" in
