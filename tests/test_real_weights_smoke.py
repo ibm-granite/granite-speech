@@ -19,10 +19,18 @@ SMOKE_AUDIO_REPO_ID = "ibm-granite/granite-speech-4.1-2b"
 SMOKE_AUDIO_FILENAME = "multilingual_sample.wav"
 SMOKE_AUDIO_REVISION = "de575db64086f84fdc79da4932d1076e965bc546"
 SMOKE_AUDIO_SHA256 = "91d243650809c1274141ec20ff23045315eaf27567694002ea3ef390048b7058"
+LOCAL_SMOKE_AUDIO_PATH = Path(__file__).with_name("fixtures") / SMOKE_AUDIO_FILENAME
 DEFAULT_SIMILARITY_THRESHOLD = 0.75
+TRANSLATION_SMOKE_CLIP_TIMESTAMPS = "12"
+TRANSLATION_SMOKE_EXPECTED_TEXT = (
+    "Dinarzade, the following night, called her sister when it was time. "
+    '"If you do not sleep, my sister," she said, "I will pray you to continue '
+    'the story of the fisherman."'
+)
 
 
-def test_base_model_llama_cpp_real_weights_smoke():
+@pytest.fixture(scope="module")
+def smoke_context():
     load_kwargs = {
         "download_root": os.environ.get("GRANITE_SPEECH_SMOKE_DOWNLOAD_ROOT"),
         "local_files_only": _env_flag("GRANITE_SPEECH_SMOKE_LOCAL_FILES_ONLY"),
@@ -43,26 +51,77 @@ def test_base_model_llama_cpp_real_weights_smoke():
         cache_dir=load_kwargs.get("download_root"),
         local_files_only=bool(load_kwargs.get("local_files_only")),
     )
-    expected_text = os.environ.get("GRANITE_SPEECH_SMOKE_EXPECTED_TEXT")
+    return load_kwargs, audio_path
 
+
+@pytest.fixture(scope="module")
+def smoke_model(smoke_context):
+    load_kwargs, _audio_path = smoke_context
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         model = granite_speech.load_model("granite-speech-4.1-2b", **load_kwargs)
-        assert model.backend.name == "llama.cpp"
 
-        result = model.transcribe(str(audio_path))
+    _assert_no_package_warnings(caught)
+    assert model.backend.name == "llama.cpp"
+    return model
 
-    package_warnings = [warning for warning in caught if _is_package_warning(warning.filename)]
-    assert package_warnings == []
-    assert result["warnings"] == []
-    assert result["segments"]
-    assert result["text"].strip()
+
+@pytest.fixture(scope="module")
+def smoke_audio_path(smoke_context) -> Path:
+    _load_kwargs, audio_path = smoke_context
+    return audio_path
+
+
+def test_base_model_llama_cpp_real_weights_smoke(smoke_model, smoke_audio_path):
+    expected_text = os.environ.get("GRANITE_SPEECH_SMOKE_EXPECTED_TEXT")
+
+    result = _transcribe_without_package_warnings(smoke_model, smoke_audio_path)
+
+    _assert_successful_smoke_result(result)
     if expected_text:
         assert _close_enough(
             result["text"],
             expected_text,
             threshold=_similarity_threshold(),
         )
+
+
+def test_base_model_llama_cpp_translation_real_weights_smoke(smoke_model, smoke_audio_path):
+    result = _transcribe_without_package_warnings(
+        smoke_model,
+        smoke_audio_path,
+        task="translate",
+        language="fr",
+        clip_timestamps=TRANSLATION_SMOKE_CLIP_TIMESTAMPS,
+    )
+
+    _assert_successful_smoke_result(result)
+    assert result["language"] == "fr"
+    assert result["target_language"] == "en"
+    expected_text = os.environ.get(
+        "GRANITE_SPEECH_TRANSLATION_SMOKE_EXPECTED_TEXT",
+        TRANSLATION_SMOKE_EXPECTED_TEXT,
+    )
+    assert _close_enough(
+        result["text"],
+        expected_text,
+        threshold=_similarity_threshold(),
+    )
+
+
+def _transcribe_without_package_warnings(model, audio_path: Path, **kwargs) -> dict:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = model.transcribe(str(audio_path), **kwargs)
+
+    _assert_no_package_warnings(caught)
+    return result
+
+
+def _assert_successful_smoke_result(result: dict) -> None:
+    assert result["warnings"] == []
+    assert result["segments"]
+    assert result["text"].strip()
 
 
 def _smoke_audio_path(*, cache_dir: str | None, local_files_only: bool) -> Path:
@@ -72,6 +131,15 @@ def _smoke_audio_path(*, cache_dir: str | None, local_files_only: bool) -> Path:
         if not path.exists():
             pytest.fail(f"GRANITE_SPEECH_SMOKE_AUDIO does not exist: {path}")
         return path
+
+    if (
+        os.environ.get("GRANITE_SPEECH_SMOKE_AUDIO_REVISION") is None
+        and LOCAL_SMOKE_AUDIO_PATH.exists()
+    ):
+        expected_sha = os.environ.get("GRANITE_SPEECH_SMOKE_AUDIO_SHA256", SMOKE_AUDIO_SHA256)
+        if expected_sha:
+            _assert_sha256(LOCAL_SMOKE_AUDIO_PATH, expected_sha)
+        return LOCAL_SMOKE_AUDIO_PATH
 
     try:
         from huggingface_hub import hf_hub_download
@@ -115,6 +183,11 @@ def _normalize_text(value: str) -> str:
 
 def _is_package_warning(filename: str) -> bool:
     return "granite_speech" in Path(filename).parts
+
+
+def _assert_no_package_warnings(caught: list[warnings.WarningMessage]) -> None:
+    package_warnings = [warning for warning in caught if _is_package_warning(warning.filename)]
+    assert package_warnings == []
 
 
 def _assert_sha256(path: Path, expected_sha: str) -> None:

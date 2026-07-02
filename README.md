@@ -157,6 +157,8 @@ granite-speech audio.wav --output_format all --output_dir transcripts/
 ```
 
 Supported output formats are `txt`, `srt`, `vtt`, `tsv`, `json`, and `all`.
+By default, the CLI writes `txt` output to the current directory using the input filename stem, so
+`granite-speech audio.wav` writes `./audio.txt`; pass `--output_dir` to choose another directory.
 For subtitle output, `--max_line_width` and `--max_line_count` wrap SRT/VTT cue text without
 changing TXT, TSV, or JSON output.
 
