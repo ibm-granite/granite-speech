@@ -57,6 +57,32 @@ Expected first-run behavior:
 - Device behavior is controlled by llama.cpp. Pass `--device` through the CLI or use CPU-only
   loading with the Python API's `device="cpu"` path when validating CPU.
 
+## Real-weights llama.cpp plus smoke
+
+`granite-speech-4.1-2b-plus` adds word-timestamp and speaker-attribution output (and drops
+translation). Its smoke lives in `tests/test_real_weights_smoke_plus.py` and reuses the same
+committed `multilingual_sample.wav` fixture:
+
+```bash
+uv run pytest tests/test_real_weights_smoke_plus.py -m real_weights
+```
+
+It loads `granite-speech-4.1-2b-plus`, asserts the `llama.cpp` backend, transcribes the fixture,
+exercises `prompt_mode="word_timestamps"` (asserting per-word `word`/`start`/`end` entries) and
+`prompt_mode="speaker_attributed"` (asserting `speaker`/`text` turns), and requires no package or
+transcription warnings. The speaker-attribution assertions are shape-only because the fixture is
+not guaranteed to contain multiple speakers.
+
+Plus support landed in llama.cpp via [PR #24818](https://github.com/ggml-org/llama.cpp/pull/24818);
+earlier builds crash when encoding the plus audio features. The smoke reads `llama-cli --version`
+and skips (rather than fails) when the build predates `MIN_LLAMA_CPP_BUILD` (currently `9850`, the
+earliest build verified to pass).
+
+Environment overrides mirror the base smoke under a `GRANITE_SPEECH_PLUS_SMOKE_*` prefix
+(`_DOWNLOAD_ROOT`, `_LOCAL_FILES_ONLY`, `_MODEL_REVISION`, `_LLAMA_CPP_BINARY`, `_LLAMA_CPP_QUANT`,
+`_TIMEOUT`, `_AUDIO`, `_AUDIO_REVISION`, `_AUDIO_SHA256`), plus
+`GRANITE_SPEECH_PLUS_SMOKE_MIN_LLAMA_CPP_BUILD` to change or disable (set to `0`) the version gate.
+
 ## Built artifact validation
 
 Run the package from a wheel in a clean environment:
