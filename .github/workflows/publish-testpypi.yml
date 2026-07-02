@@ -1,0 +1,46 @@
+name: Publish to Test PyPI
+
+# Manual-only. Builds the sdist/wheel and uploads them to Test PyPI
+# (https://test.pypi.org) so a release can be smoke-tested before it goes to
+# real PyPI. Trigger via the Actions "Run workflow" button.
+#
+# Auth: set a Test PyPI API token as the repository secret TEST_PYPI_API_TOKEN
+# (create it at https://test.pypi.org/manage/account/token/).
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: publish-testpypi
+  cancel-in-progress: false
+
+jobs:
+  publish-testpypi:
+    name: Build and publish to Test PyPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Build artifacts
+        run: uv build
+
+      - name: Check package metadata
+        run: uv run twine check dist/*
+
+      # Upload to Test PyPI. --skip-existing lets a re-run pass cleanly if a file
+      # for this version was already uploaded (Test PyPI rejects re-uploads).
+      - name: Publish to Test PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
+        run: uv run twine upload --skip-existing dist/*
