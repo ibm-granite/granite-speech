@@ -89,6 +89,16 @@ class VadSegmenter:
         samples: np.ndarray,
         sample_rate: int,
     ) -> list[tuple[int, int]]:
+        """Find speech spans by relative frame energy (RMS).
+
+        Slides a frame over the audio and computes each frame's RMS. The
+        threshold is *relative* to the loudest frame (``peak_rms * threshold``),
+        not an absolute level, so it adapts to overall recording gain; silent
+        audio (peak RMS 0) yields no spans. Contiguous above-threshold frames
+        become a span, and spans shorter than ``min_speech_duration`` are
+        dropped as noise. Returns ``(start_sample, end_sample)`` pairs; padding,
+        merging, and length-splitting happen in the caller.
+        """
         frame_samples = max(1, int(round(self.frame_length * sample_rate)))
         step_samples = max(1, int(round(self.frame_step * sample_rate)))
         total_samples = samples.shape[-1]

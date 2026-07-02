@@ -196,7 +196,7 @@ def test_model_card_prompt_forms_reach_llama_cpp_backend_exactly():
     ]
 
 
-def test_plus_model_card_prompt_forms_reach_transformers_backend_exactly():
+def test_plus_model_card_prompt_forms_reach_backend_exactly():
     tokenizer = RecordingTokenizer()
     model = fake_plus_model(["asr", "kw asr", "full asr", "saa", "ts"], tokenizer)
     wav = np.zeros(16000, dtype=np.float32)

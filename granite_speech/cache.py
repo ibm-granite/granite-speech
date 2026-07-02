@@ -7,6 +7,14 @@ ENV_CACHE = "GRANITE_SPEECH_CACHE"
 
 
 def resolve_cache_dir(download_root: str | os.PathLike[str] | None = None) -> Path:
+    """Resolve the directory model weights are cached in.
+
+    Checks sources in priority order and returns the first that is set:
+    the explicit ``download_root`` argument, then ``$GRANITE_SPEECH_CACHE``,
+    then the Hugging Face ``$HF_HUB_CACHE`` and ``$HF_HOME/hub`` locations,
+    falling back to ``~/.cache/granite-speech``. The path is expanded (``~``)
+    but not created here.
+    """
     if download_root is not None:
         return Path(download_root).expanduser()
 

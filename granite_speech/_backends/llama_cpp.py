@@ -111,6 +111,10 @@ _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 
 def _clean_line(line: str) -> str:
+    # llama-cli's interactive TUI redraws lines in place: it emits ANSI escapes
+    # and backspace (\b) sequences rather than clean text. Strip the escapes,
+    # then replay each backspace (delete the char before it) to recover the
+    # final rendered line.
     line = _ANSI_RE.sub("", line)
     while "\b" in line:
         line = re.sub(r".?\b", "", line, count=1)
@@ -118,6 +122,22 @@ def _clean_line(line: str) -> str:
 
 
 def _extract_transcript(output: str, *, prompt: str) -> str:
+    """Screen-scrape the transcript out of llama-cli's interactive output.
+
+    This is inherently fragile: llama.cpp exposes Granite Speech only through its
+    multimodal *interactive* CLI, which interleaves the transcript with TUI
+    chrome, so there is no clean stdout to parse. Two strategies, primary then
+    fallback, cover the llama-cli behaviors seen in the wild:
+
+    Primary — current builds echo the prompt back, so we anchor on that echoed
+    line (``> {prompt}`` or the bare prompt) and collect everything after it
+    until the ``Exiting...`` / ``[ Prompt:`` end markers.
+
+    Fallback — some builds honor ``--no-display-prompt`` in single-turn mode and
+    never echo the prompt, leaving no anchor. There we instead reject known CLI
+    boilerplate by prefix and drop the block-glyph art the CLI draws for audio
+    input, keeping whatever remains.
+    """
     lines = [_clean_line(line) for line in output.replace("\r", "\n").splitlines()]
 
     transcript: list[str] = []
@@ -137,7 +157,8 @@ def _extract_transcript(output: str, *, prompt: str) -> str:
     if transcript:
         return "\n".join(transcript).strip()
 
-    # Fallback for llama.cpp builds that eventually honor --no-display-prompt in single-turn mode.
+    # No prompt echo to anchor on (see fallback note above). Reject the boilerplate
+    # lines llama-cli prints around a single-turn run, by leading token.
     boilerplate_prefixes = (
         "Loading model",
         "build",
@@ -160,6 +181,8 @@ def _extract_transcript(output: str, *, prompt: str) -> str:
         and line != "Exiting..."
         and not line.startswith("[ Prompt:")
         and not any(line.startswith(prefix) for prefix in boilerplate_prefixes)
+        # Drop the ASCII-art waveform llama-cli renders for the audio input:
+        # lines made up only of block glyphs (and spaces).
         and not set(line) <= {"▄", "█", "▀", " "}
     ]
     return "\n".join(kept).strip()

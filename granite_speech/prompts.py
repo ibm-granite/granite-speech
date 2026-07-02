@@ -10,6 +10,10 @@ from .errors import InvalidArgumentError
 AUDIO_TOKEN = "<|audio|>"
 DEFAULT_ASR_INSTRUCTION = "transcribe the speech with proper punctuation and capitalization."
 KEYWORD_BIAS_ASR_INSTRUCTION = "transcribe the speech to text."
+# Reproduces the plus model's training-time system prompt verbatim. The dates are
+# fixed on purpose to match what the model saw during training — they are NOT the
+# current date and must not be templated to "today", or output drifts from the
+# trained distribution.
 PLUS_SYSTEM_PROMPT = (
     "Knowledge Cutoff Date: April 2024.\n"
     "Today's Date: December 19, 2024.\n"
@@ -45,6 +49,17 @@ def build_prompt(
     prompt_mode: str = "default",
     prefix_text: str | None = None,
 ) -> PromptParts:
+    """Build the instruction and the full templated prompt for one request.
+
+    Resolves the instruction text — an explicit ``prompt`` (with any audio token
+    stripped) overrides the task/language/``prompt_mode`` default — then appends
+    keyword biases and the ``<|audio|>`` token. When the tokenizer exposes
+    ``apply_chat_template`` (the plus models), the instruction is rendered
+    through the chat template, including the plus system prompt and any
+    ``prefix_text`` decoding hook; otherwise the raw content is used. Returns
+    :class:`PromptParts` with both the templated ``prompt`` and the bare
+    ``instruction`` (backends that take an instruction directly use the latter).
+    """
     keywords = normalize_keyword_biases(keyword_biases)
     instruction = (
         _strip_audio_token(prompt)

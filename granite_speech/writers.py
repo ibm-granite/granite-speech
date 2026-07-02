@@ -20,6 +20,14 @@ def get_writer(
     max_line_width: int | None = None,
     max_line_count: int | None = None,
 ) -> Callable[[dict, str | Path], list[Path]]:
+    """Return a writer that serializes a result dict to ``output_dir``.
+
+    The output request is validated up front (so an invalid ``output_format`` or
+    subtitle-layout option raises immediately, not when the writer is called).
+    The returned callable takes ``(result, audio_path)``, writes one file per
+    concrete format (``"all"`` expands to every format), and returns the paths
+    written. ``max_line_width`` / ``max_line_count`` apply only to SRT/VTT cues.
+    """
     _validate_output_request(
         output_format, max_line_width=max_line_width, max_line_count=max_line_count
     )
@@ -184,6 +192,15 @@ def _format_subtitle_text(
     max_line_width: int | None,
     max_line_count: int | None,
 ) -> str:
+    """Wrap one cue's text into subtitle lines.
+
+    With neither limit set, the text is returned stripped and otherwise
+    untouched. ``max_line_width`` wraps on word boundaries (never breaking words
+    or hyphens, so a single word longer than the width overflows rather than
+    splitting). ``max_line_count`` then caps the number of lines: any overflow
+    is folded back into the last allowed line so no text is dropped — with
+    ``max_line_count=1`` the whole cue collapses onto one line.
+    """
     stripped = text.strip()
     if max_line_width is None and max_line_count is None:
         return stripped

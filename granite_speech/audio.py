@@ -41,6 +41,15 @@ def load_audio(
     sample_rate: int | None = None,
     max_audio_seconds: float | None = None,
 ) -> AudioData:
+    """Load and normalize audio to mono, 16 kHz, float32.
+
+    Path inputs infer their sample rate from the file, so passing ``sample_rate``
+    with a path is an error; raw array/tensor inputs require ``sample_rate``. The
+    waveform is validated against ``max_audio_seconds`` (a decompression-bomb
+    guard, checked both before and after resampling), converted to float32,
+    downmixed to mono, and resampled to :data:`SAMPLE_RATE` if needed. Returns an
+    :class:`AudioData` with a contiguous float32 waveform.
+    """
     if isinstance(audio, (str, Path)):
         if sample_rate is not None:
             raise InvalidArgumentError(

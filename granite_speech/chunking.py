@@ -45,6 +45,19 @@ def transcribe_chunks(
     sample_rate: int,
     options: ChunkingOptions,
 ) -> dict:
+    """Transcribe a waveform by splitting it into windows and reconciling them.
+
+    ``chunk_length`` is first clamped to the backend's reliable limit (recording
+    a ``chunk_clamp`` warning if it was exceeded). The audio is then segmented —
+    fixed overlapping windows, or VAD-detected speech spans when
+    ``segmentation='vad'`` (VAD forbids ``chunk_overlap``) — and each window is
+    generated independently. A window that fails is captured as a per-window
+    warning rather than aborting the run. Overlapping fixed windows are
+    de-duplicated at their seams via the reconciliation pass, and the surviving
+    text plus per-segment timing is assembled into the result dict
+    (``text`` / ``segments`` / ``warnings``, and ``words`` / ``speakers`` for the
+    plus prompt modes).
+    """
     warnings: list[dict] = []
     chunk_length = options.chunk_length
 
