@@ -7,7 +7,10 @@ from pathlib import Path
 
 from .errors import InvalidArgumentError
 
-OUTPUT_FORMATS = {"txt", "srt", "vtt", "tsv", "json", "all"}
+# Concrete formats in the order "all" emits them; OUTPUT_FORMATS adds the "all"
+# meta-format that expands to every entry here.
+_CONCRETE_FORMATS = ("txt", "srt", "vtt", "tsv", "json")
+OUTPUT_FORMATS = {*_CONCRETE_FORMATS, "all"}
 
 
 def get_writer(
@@ -17,11 +20,9 @@ def get_writer(
     max_line_width: int | None = None,
     max_line_count: int | None = None,
 ) -> Callable[[dict, str | Path], list[Path]]:
-    if output_format not in OUTPUT_FORMATS:
-        raise InvalidArgumentError(
-            f"output_format must be one of {', '.join(sorted(OUTPUT_FORMATS))}"
-        )
-    _validate_subtitle_layout(max_line_width=max_line_width, max_line_count=max_line_count)
+    _validate_output_request(
+        output_format, max_line_width=max_line_width, max_line_count=max_line_count
+    )
 
     def writer(result: dict, audio_path: str | Path) -> list[Path]:
         return write_result(
@@ -45,12 +46,10 @@ def write_result(
     max_line_width: int | None = None,
     max_line_count: int | None = None,
 ) -> list[Path]:
-    if output_format not in OUTPUT_FORMATS:
-        raise InvalidArgumentError(
-            f"output_format must be one of {', '.join(sorted(OUTPUT_FORMATS))}"
-        )
-    _validate_subtitle_layout(max_line_width=max_line_width, max_line_count=max_line_count)
-    formats = ["txt", "srt", "vtt", "tsv", "json"] if output_format == "all" else [output_format]
+    _validate_output_request(
+        output_format, max_line_width=max_line_width, max_line_count=max_line_count
+    )
+    formats = list(_CONCRETE_FORMATS) if output_format == "all" else [output_format]
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = Path(audio_path).stem
@@ -115,20 +114,13 @@ def _format_srt(
     max_line_width: int | None = None,
     max_line_count: int | None = None,
 ) -> str:
-    cues = []
-    for idx, segment in enumerate(_successful_text_segments(result), start=1):
-        text = _format_subtitle_text(
-            segment["text"],
-            max_line_width=max_line_width,
-            max_line_count=max_line_count,
-        )
-        cues.append(
-            f"{idx}\n"
-            f"{format_timestamp(segment['start'], decimal_marker=',')} --> "
-            f"{format_timestamp(segment['end'], decimal_marker=',')}\n"
-            f"{text}\n"
-        )
-    return "\n".join(cues)
+    return _format_cues(
+        result,
+        decimal_marker=",",
+        numbered=True,
+        max_line_width=max_line_width,
+        max_line_count=max_line_count,
+    )
 
 
 def _format_vtt(
@@ -137,17 +129,36 @@ def _format_vtt(
     max_line_width: int | None = None,
     max_line_count: int | None = None,
 ) -> str:
-    cues = ["WEBVTT\n"]
-    for segment in _successful_text_segments(result):
+    return _format_cues(
+        result,
+        header="WEBVTT\n",
+        decimal_marker=".",
+        numbered=False,
+        max_line_width=max_line_width,
+        max_line_count=max_line_count,
+    )
+
+
+def _format_cues(
+    result: dict,
+    *,
+    header: str | None = None,
+    decimal_marker: str,
+    numbered: bool,
+    max_line_width: int | None,
+    max_line_count: int | None,
+) -> str:
+    cues = [header] if header is not None else []
+    for idx, segment in enumerate(_successful_text_segments(result), start=1):
         text = _format_subtitle_text(
             segment["text"],
             max_line_width=max_line_width,
             max_line_count=max_line_count,
         )
-        cues.append(
-            f"{format_timestamp(segment['start'])} --> {format_timestamp(segment['end'])}\n"
-            f"{text}\n"
-        )
+        start = format_timestamp(segment["start"], decimal_marker=decimal_marker)
+        end = format_timestamp(segment["end"], decimal_marker=decimal_marker)
+        index = f"{idx}\n" if numbered else ""
+        cues.append(f"{index}{start} --> {end}\n{text}\n")
     return "\n".join(cues)
 
 
@@ -199,6 +210,19 @@ def _format_subtitle_text(
         else:
             lines = lines[: max_line_count - 1] + [" ".join(lines[max_line_count - 1 :])]
     return "\n".join(lines)
+
+
+def _validate_output_request(
+    output_format: str,
+    *,
+    max_line_width: int | None,
+    max_line_count: int | None,
+) -> None:
+    if output_format not in OUTPUT_FORMATS:
+        raise InvalidArgumentError(
+            f"output_format must be one of {', '.join(sorted(OUTPUT_FORMATS))}"
+        )
+    _validate_subtitle_layout(max_line_width=max_line_width, max_line_count=max_line_count)
 
 
 def _validate_subtitle_layout(
