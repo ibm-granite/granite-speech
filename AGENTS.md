@@ -30,6 +30,9 @@ live in `examples/`, which has its own `pyproject.toml`.
 - `uv build && uv run twine check dist/*`: build and validate package metadata.
 - `scripts/check-built-artifacts.sh`: build a wheel, install it into a temporary venv, and run tests
   against the installed package.
+- `scripts/smoke-testpypi.sh [version]`: install the published Test PyPI build into a temporary venv
+  (deps resolve from real PyPI) and run the base + plus real-weights smoke tests against it. Requires
+  `llama-cli` (build >= 9850 for the plus suite); set `GRANITE_SPEECH_SMOKE_SUITE=base|plus` to narrow.
 - `uv run granite-speech audio.wav --output_format txt`: exercise the CLI from the checkout.
 - `uv run granite-speech download granite-speech-4.1-2b --llama_cpp_quant Q4_K_M`: prefetch GGUF
   model and mmproj files for offline or container use.
