@@ -55,4 +55,5 @@ class TransformersBackend:
             output_ids = output_ids[:, input_ids.shape[-1] :]
 
         text = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-        return GenerateResult(text=text)
+        tokens = output_ids[0].detach().cpu().tolist() if output_ids.ndim == 2 else None
+        return GenerateResult(text=text, tokens=tokens)

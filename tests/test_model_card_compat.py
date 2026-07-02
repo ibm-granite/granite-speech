@@ -290,9 +290,11 @@ def test_plus_speaker_tags_are_parsed_into_structured_turns():
     ]
     assert result["segments"] == [
         {
+            "id": 0,
             "start": 0.0,
             "end": 1.0,
             "text": "Hello there. Hi.",
+            "temperature": 0.0,
             "raw_text": raw,
             "speakers": result["speakers"],
         }
@@ -313,9 +315,11 @@ def test_plus_timestamp_tags_are_parsed_into_structured_words():
     ]
     assert result["segments"] == [
         {
+            "id": 0,
             "start": 0.0,
             "end": 1.0,
             "text": "hello world",
+            "temperature": 0.0,
             "raw_text": raw,
             "words": result["words"],
         }

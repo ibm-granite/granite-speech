@@ -54,8 +54,20 @@ def test_thirty_minute_long_form_audio_transcribes_in_order():
     assert len(backend.calls) == 60
     assert result["text"].startswith("chunk-00 chunk-01")
     assert result["text"].endswith("chunk-58 chunk-59")
-    assert result["segments"][0] == {"start": 0.0, "end": 30.0, "text": "chunk-00"}
-    assert result["segments"][-1] == {"start": 1770.0, "end": 1800.0, "text": "chunk-59"}
+    assert result["segments"][0] == {
+        "id": 0,
+        "start": 0.0,
+        "end": 30.0,
+        "text": "chunk-00",
+        "temperature": 0.0,
+    }
+    assert result["segments"][-1] == {
+        "id": 59,
+        "start": 1770.0,
+        "end": 1800.0,
+        "text": "chunk-59",
+        "temperature": 0.0,
+    }
     assert all(call.wav.shape == (1, 30) for call in backend.calls)
     assert all(call.max_new_tokens == 200 for call in backend.calls)
 

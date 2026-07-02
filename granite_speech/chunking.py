@@ -87,7 +87,9 @@ def transcribe_chunks(
 
     segments: list[dict] = []
 
-    for window, (seg_start, seg_end) in zip(windows, boundaries, strict=True):
+    for segment_id, (window, (seg_start, seg_end)) in enumerate(
+        zip(windows, boundaries, strict=True)
+    ):
         window_wav = wav[:, window.start_sample : window.end_sample]
         window_duration = window_wav.shape[-1] / sample_rate if sample_rate else chunk_length
         try:
@@ -105,7 +107,15 @@ def transcribe_chunks(
                 temperature=options.temperature,
             )
             generated = backend.generate(req)
-            segment = {"start": seg_start, "end": seg_end, "text": generated.text.strip()}
+            segment = {
+                "id": segment_id,
+                "start": seg_start,
+                "end": seg_end,
+                "text": generated.text.strip(),
+                "temperature": options.temperature,
+            }
+            if generated.tokens is not None:
+                segment["tokens"] = list(generated.tokens)
             if generated.words is not None:
                 segment["_backend_words"] = generated.words
             if generated.speakers is not None:
@@ -113,7 +123,14 @@ def transcribe_chunks(
             segments.append(segment)
         except Exception as exc:
             error = str(exc).strip() or exc.__class__.__name__
-            segment = {"start": seg_start, "end": seg_end, "text": "", "error": error}
+            segment = {
+                "id": segment_id,
+                "start": seg_start,
+                "end": seg_end,
+                "text": "",
+                "temperature": options.temperature,
+                "error": error,
+            }
             segments.append(segment)
             warning = {"type": "window_error", **segment}
             warnings.append(warning)

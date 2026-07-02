@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from granite_speech._backends import GenerateResult
 from granite_speech._backends.fake import FakeBackend
 from granite_speech._models import MODELS
 from granite_speech.errors import InvalidArgumentError, TranscriptionError
@@ -38,12 +39,41 @@ def test_short_audio_yields_one_window_and_result_contract():
     result = model.transcribe(mono(5), sample_rate=16000)
 
     assert result["text"] == "hello world"
-    assert result["segments"] == [{"start": 0.0, "end": 5.0, "text": "hello world"}]
+    assert result["segments"] == [
+        {
+            "id": 0,
+            "start": 0.0,
+            "end": 5.0,
+            "text": "hello world",
+            "temperature": 0.0,
+        }
+    ]
+    assert "tokens" not in result["segments"][0]
+    assert "avg_logprob" not in result["segments"][0]
+    assert "compression_ratio" not in result["segments"][0]
+    assert "no_speech_prob" not in result["segments"][0]
     assert result["language"] is None
     assert result["target_language"] is None
     assert result["warnings"] == []
     assert model.backend.calls[0].wav.shape == (1, 5 * 16000)
     assert model.backend.calls[0].prompt.startswith("CHAT:<|audio|>")
+
+
+def test_backend_tokens_are_preserved_when_available():
+    model = fake_model([GenerateResult(text="tokenized transcript", tokens=[101, 202, 303])])
+
+    result = model.transcribe(mono(1), sample_rate=16000, temperature=0.2)
+
+    assert result["segments"] == [
+        {
+            "id": 0,
+            "start": 0.0,
+            "end": 1.0,
+            "text": "tokenized transcript",
+            "temperature": 0.2,
+            "tokens": [101, 202, 303],
+        }
+    ]
 
 
 def test_empty_audio_is_successful_empty_result():

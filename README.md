@@ -72,12 +72,25 @@ print(result["text"])
 ```python
 {
     "text": str,
-    "segments": [{"start": float, "end": float, "text": str}],
+    "segments": [
+        {
+            "id": int,
+            "start": float,
+            "end": float,
+            "text": str,
+            "temperature": float,
+            # "tokens": list[int],  # only present when the backend provides token IDs
+        }
+    ],
     "language": str | None,
     "target_language": str | None,
     "warnings": list[dict],
 }
 ```
+
+The segment `id` and `temperature` fields are included as Whisper-familiar compatibility metadata.
+Granite Speech does not fabricate Whisper confidence fields such as `avg_logprob`,
+`compression_ratio`, or `no_speech_prob`.
 
 For translation, pass an explicit source language. If `target_language` is omitted, it defaults to
 English:
