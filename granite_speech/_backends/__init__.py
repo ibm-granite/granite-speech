@@ -5,8 +5,12 @@ from typing import Protocol
 
 import numpy as np
 
-# Every Granite Speech backend consumes 16 kHz mono audio; load_audio resamples
-# to this rate before a GenerateRequest is ever built.
+from ..errors import InvalidArgumentError
+
+# The rate every Granite Speech backend requires; require_sample_rate() enforces
+# it on each GenerateRequest. Deliberately separate from audio.SAMPLE_RATE (the
+# audio-loading target that load_audio resamples to): same value, different
+# layer. This is the backend contract and must not depend on the audio module.
 SAMPLE_RATE = 16000
 
 
@@ -52,7 +56,9 @@ class Backend(Protocol):
 def require_sample_rate(sample_rate: int) -> None:
     """Guard that a request uses the audio rate every backend expects."""
     if sample_rate != SAMPLE_RATE:
-        raise ValueError(f"GenerateRequest.sample_rate must be {SAMPLE_RATE}, got {sample_rate}")
+        raise InvalidArgumentError(
+            f"GenerateRequest.sample_rate must be {SAMPLE_RATE}, got {sample_rate}"
+        )
 
 
 __all__ = [

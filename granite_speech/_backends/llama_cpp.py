@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from ..errors import InvalidArgumentError, TranscriptionError
 from . import BackendCapabilities, GenerateRequest, GenerateResult, require_sample_rate
 
 
@@ -34,7 +35,9 @@ class LlamaCppBackend:
     def generate(self, req: GenerateRequest) -> GenerateResult:
         require_sample_rate(req.sample_rate)
         if req.num_beams != 1:
-            raise ValueError("llama.cpp backend does not support beam search; use num_beams=1")
+            raise InvalidArgumentError(
+                "llama.cpp backend does not support beam search; use num_beams=1"
+            )
 
         prompt = req.instruction or _strip_audio_token(req.prompt)
         with tempfile.NamedTemporaryFile(
@@ -61,7 +64,7 @@ class LlamaCppBackend:
         output = completed.stdout or ""
         if completed.returncode != 0:
             detail = _last_nonempty_line(output) or f"exit code {completed.returncode}"
-            raise RuntimeError(f"llama.cpp generation failed: {detail}")
+            raise TranscriptionError(f"llama.cpp generation failed: {detail}")
 
         return GenerateResult(text=_extract_transcript(output, prompt=prompt))
 

@@ -3,12 +3,10 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Iterable
-from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from ._models import DEFAULT_MODEL, available_models
+from .audio import AudioInput
 from .errors import (
     AudioDecodeError,
     GraniteSpeechError,
@@ -28,7 +26,7 @@ _MODEL_CACHE_LOCK = threading.Lock()
 
 
 def transcribe(
-    audio: str | Path | np.ndarray | Any,
+    audio: AudioInput,
     *,
     model: str = DEFAULT_MODEL,
     sample_rate: int | None = None,

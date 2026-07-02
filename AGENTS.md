@@ -17,7 +17,7 @@ For the Pipecat example, run `cd examples && uv sync`, then `uv run python live_
 
 ## Coding Style & Naming Conventions
 
-Use Python 3.10-compatible syntax, 4-space indentation, and Ruff's configured `line-length = 100`. Prefer `snake_case` for modules, functions, variables, and CLI options; use `PascalCase` for classes and exception types. Keep backend-specific behavior inside `granite_speech/_backends/` and expose stable public APIs through `granite_speech/__init__.py`, `model.py`, and `cli.py`.
+Use Python 3.10-compatible syntax, 4-space indentation, and Ruff's configured `line-length = 100`. Prefer `snake_case` for modules, functions, variables, and CLI options; use `PascalCase` for classes and exception types. Keep backend-specific behavior inside `granite_speech/_backends/` and expose stable public APIs through `granite_speech/__init__.py`, `model.py`, and `cli.py`. Declare `__all__` only on modules that form an import boundary (the package `__init__.py`, `_backends/__init__.py`, and each concrete backend); internal implementation modules are imported by explicit name and intentionally omit it.
 
 ## Testing Guidelines
 

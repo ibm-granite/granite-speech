@@ -5,7 +5,6 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from math import isfinite
 from numbers import Real
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -16,7 +15,7 @@ from ._models import (
     validate_source_language,
     validate_translation_pair,
 )
-from .audio import load_audio
+from .audio import AudioInput, load_audio
 from .chunking import ChunkingOptions, join_text, transcribe_chunks
 from .errors import InvalidArgumentError
 from .prompts import PROMPT_MODES, build_prompt, normalize_keyword_biases
@@ -73,7 +72,7 @@ class GraniteSpeechModel:
 
     def transcribe(
         self,
-        audio: str | Path | np.ndarray | Any,
+        audio: AudioInput,
         *,
         sample_rate: int | None = None,
         task: str = "transcribe",

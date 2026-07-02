@@ -3,15 +3,26 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 
 from .errors import AudioDecodeError, InvalidArgumentError
 
+# The rate load_audio resamples every input to. Deliberately separate from
+# _backends.SAMPLE_RATE (the backend-contract constant): this is the audio-layer
+# target, that is the interface backends validate against. They hold the same
+# value but belong to different layers, so the audio module does not import from
+# _backends (which would invert the dependency direction).
 SAMPLE_RATE = 16000
 DEFAULT_MAX_AUDIO_SECONDS = 4 * 60 * 60
 ENV_MAX_AUDIO_SECONDS = "GRANITE_SPEECH_MAX_AUDIO_SECONDS"
+
+# Accepted audio inputs: a filesystem path (str/Path) or an in-memory waveform.
+# np.ndarray is the concrete array type; array-likes that convert cleanly via
+# np.asarray (e.g. torch tensors) are also accepted at runtime without a torch
+# import. Kept as a named alias so all public signatures stay in sync.
+AudioInput: TypeAlias = str | Path | np.ndarray
 
 
 @dataclass(frozen=True)
@@ -25,7 +36,7 @@ class AudioData:
 
 
 def load_audio(
-    audio: str | Path | np.ndarray | Any,
+    audio: AudioInput,
     *,
     sample_rate: int | None = None,
     max_audio_seconds: float | None = None,
