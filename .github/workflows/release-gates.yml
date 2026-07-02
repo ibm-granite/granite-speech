@@ -1,0 +1,41 @@
+name: Release Gates
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  unit-lint-build:
+    name: Unit, Lint, Build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.10"
+          - "3.12"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run unit tests
+        run: uv run pytest -m "not real_weights"
+
+      - name: Run Ruff
+        run: uv run ruff check .
+
+      - name: Build artifacts
+        run: uv build
+
+      - name: Check package metadata
+        run: uv run twine check dist/*

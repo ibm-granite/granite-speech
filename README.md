@@ -138,6 +138,9 @@ result = granite_speech.transcribe("audio.wav")
 Migrating existing Whisper code? See the [porting guide](docs/porting-from-whisper.md) for the
 supported aliases and intentional differences.
 
+Release validation commands, including the opt-in real-weights llama.cpp smoke, are documented in
+[docs/release-checks.md](docs/release-checks.md).
+
 ## CLI
 
 ```bash

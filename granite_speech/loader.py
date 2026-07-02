@@ -14,7 +14,7 @@ from .errors import InvalidArgumentError, ModelLoadError, TransformersVersionErr
 from .model import GraniteSpeechModel
 
 TRANSFORMERS_MIN_VERSION = "5.8.0"
-TRANSFORMERS_TESTED_MAX_VERSION = "5.10.2"
+TRANSFORMERS_TESTED_MAX_VERSION = "5.12.1"
 DEFAULT_LLAMA_CPP_QUANT = "Q4_K_M"
 LLAMA_CPP_DEFAULT_MAX_AUDIO_SECONDS = 120.0
 
