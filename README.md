@@ -5,13 +5,11 @@ A Whisper-like Python library for IBM's Granite Speech models.
 The goal is to make speech-to-text with Granite as simple as Whisper:
 
 ```bash
-git clone https://github.com/ibm-granite/granite-speech.git
-cd granite-speech
-uv sync
+pip install granite-speech
 ```
 
 ```bash
-uv run python - <<'PY'
+python - <<'PY'
 import granite_speech
 
 model = granite_speech.load_model()        # defaults to granite-speech-4.1-2b
@@ -23,23 +21,35 @@ PY
 …and from the command line:
 
 ```bash
-uv run granite-speech audio.wav --model granite-speech-4.1-2b --output_format srt
+granite-speech audio.wav --model granite-speech-4.1-2b --output_format srt
 ```
 
 ## Install
 
+Granite Speech requires Python 3.10 or later. Install the published package from PyPI:
+
 ```bash
-git clone https://github.com/ibm-granite/granite-speech.git
-cd granite-speech
-uv sync
+pip install granite-speech
 ```
 
-Run commands from the repository root with `uv run`, or activate `.venv` manually.
-
-For a specific CUDA build, sync with the matching PyTorch wheel index:
+In a uv-managed project, add it as a dependency:
 
 ```bash
-uv sync --index https://download.pytorch.org/whl/cu124
+uv add granite-speech
+```
+
+For one-off CLI use without adding it to a project:
+
+```bash
+uvx granite-speech audio.wav --output_format txt
+```
+
+Granite Speech depends on PyTorch. If you need a specific CUDA build, install matching
+`torch` and `torchaudio` wheels first, then install Granite Speech:
+
+```bash
+pip install --index-url https://download.pytorch.org/whl/cu124 torch torchaudio
+pip install granite-speech
 ```
 
 ## Python API
@@ -131,16 +141,16 @@ supported aliases and intentional differences.
 ## CLI
 
 ```bash
-uv run granite-speech audio.wav --model granite-speech-4.1-2b --output_format txt
-uv run granite-speech audio.wav --llama_cpp_quant Q4_K_M
-uv run granite-speech audio.wav --task translate --language fr --output_format json
-uv run granite-speech audio.wav --keyword "Granite Speech" --keyword watsonx.ai
-uv run granite-speech meeting.wav --model granite-speech-4.1-2b-plus --prompt_mode speaker_attributed
-uv run granite-speech meeting.wav --model granite-speech-4.1-2b-plus --prompt_mode word_timestamps --max_new_tokens 10000
-uv run granite-speech audio.wav --segmentation vad --chunk_length 30
-uv run granite-speech audio.wav --clip_timestamps 10,20
-uv run granite-speech audio.wav --output_format srt --max_line_width 42 --max_line_count 2
-uv run granite-speech audio.wav --output_format all --output_dir transcripts/
+granite-speech audio.wav --model granite-speech-4.1-2b --output_format txt
+granite-speech audio.wav --llama_cpp_quant Q4_K_M
+granite-speech audio.wav --task translate --language fr --output_format json
+granite-speech audio.wav --keyword "Granite Speech" --keyword watsonx.ai
+granite-speech meeting.wav --model granite-speech-4.1-2b-plus --prompt_mode speaker_attributed
+granite-speech meeting.wav --model granite-speech-4.1-2b-plus --prompt_mode word_timestamps --max_new_tokens 10000
+granite-speech audio.wav --segmentation vad --chunk_length 30
+granite-speech audio.wav --clip_timestamps 10,20
+granite-speech audio.wav --output_format srt --max_line_width 42 --max_line_count 2
+granite-speech audio.wav --output_format all --output_dir transcripts/
 ```
 
 Supported output formats are `txt`, `srt`, `vtt`, `tsv`, `json`, and `all`.
@@ -175,9 +185,9 @@ Exit codes:
 Pre-download model weights for offline or container builds:
 
 ```bash
-uv run granite-speech download granite-speech-4.1-2b --download_root /models/granite-speech
-uv run granite-speech download granite-speech-4.1-2b --llama_cpp_quant Q4_K_M
-uv run granite-speech download granite-speech-4.1-2b-plus --llama_cpp_quant Q4_K_M
+granite-speech download granite-speech-4.1-2b --download_root /models/granite-speech
+granite-speech download granite-speech-4.1-2b --llama_cpp_quant Q4_K_M
+granite-speech download granite-speech-4.1-2b-plus --llama_cpp_quant Q4_K_M
 ```
 
 ## llama.cpp
