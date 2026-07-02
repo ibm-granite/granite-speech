@@ -3,6 +3,8 @@ from __future__ import annotations
 import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
+from math import isfinite
+from numbers import Real
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +17,7 @@ from ._models import (
     validate_translation_pair,
 )
 from .audio import load_audio
-from .chunking import ChunkingOptions, transcribe_chunks
+from .chunking import ChunkingOptions, join_text, transcribe_chunks
 from .errors import InvalidArgumentError
 from .prompts import PROMPT_MODES, build_prompt, normalize_keyword_biases
 from .segmenter import validate_chunk_geometry, validate_vad_options
@@ -24,7 +26,6 @@ _WHISPER_DEFAULT_ONLY_OPTIONS = {
     "compression_ratio_threshold": 2.4,
     "logprob_threshold": -1.0,
     "no_speech_threshold": 0.6,
-    "clip_timestamps": "0",
     "hallucination_silence_threshold": None,
     "best_of": None,
     "patience": None,
@@ -53,6 +54,12 @@ _WHISPER_WARN_ONLY_OPTIONS = {
         "ignoring append_punctuations."
     ),
 }
+
+
+@dataclass(frozen=True)
+class ClipSpan:
+    start: float
+    end: float
 
 
 @dataclass
@@ -90,6 +97,7 @@ class GraniteSpeechModel:
         initial_prompt: str | None = None,
         word_timestamps: bool | None = None,
         fp16: bool | None = None,
+        clip_timestamps: str | Iterable[float] | Iterable[tuple[float, float]] | None = None,
         **whisper_options: Any,
     ) -> dict:
         prompt, prompt_mode, num_beams, temperature = _resolve_whisper_compat_options(
@@ -122,6 +130,7 @@ class GraniteSpeechModel:
         normalized_keyword_biases = normalize_keyword_biases(keyword_biases)
 
         audio_data = load_audio(audio, sample_rate=sample_rate)
+        clip_spans = _resolve_clip_spans(clip_timestamps, duration=audio_data.duration)
         prompt_parts = build_prompt(
             self.tokenizer,
             task=task,
@@ -134,30 +143,32 @@ class GraniteSpeechModel:
             prefix_text=prefix_text,
         )
 
-        chunk_result = transcribe_chunks(
+        chunk_options = ChunkingOptions(
+            task=task,
+            language=language,
+            target_language=target_language,
+            prompt=prompt_parts.prompt,
+            instruction=prompt_parts.instruction,
+            keyword_biases=normalized_keyword_biases,
+            prompt_mode=prompt_mode,
+            max_new_tokens=max_new_tokens,
+            num_beams=num_beams,
+            temperature=temperature,
+            chunk_length=chunk_length,
+            chunk_overlap=chunk_overlap,
+            verbose=verbose,
+            segmentation=segmentation,
+            vad_threshold=vad_threshold,
+            vad_min_speech_duration=vad_min_speech_duration,
+            vad_min_silence_duration=vad_min_silence_duration,
+            vad_speech_pad=vad_speech_pad,
+        )
+        chunk_result = _transcribe_clip_spans(
             audio_data.wav,
             backend=self.backend,
             sample_rate=audio_data.sample_rate,
-            options=ChunkingOptions(
-                task=task,
-                language=language,
-                target_language=target_language,
-                prompt=prompt_parts.prompt,
-                instruction=prompt_parts.instruction,
-                keyword_biases=normalized_keyword_biases,
-                prompt_mode=prompt_mode,
-                max_new_tokens=max_new_tokens,
-                num_beams=num_beams,
-                temperature=temperature,
-                chunk_length=chunk_length,
-                chunk_overlap=chunk_overlap,
-                verbose=verbose,
-                segmentation=segmentation,
-                vad_threshold=vad_threshold,
-                vad_min_speech_duration=vad_min_speech_duration,
-                vad_min_silence_duration=vad_min_silence_duration,
-                vad_speech_pad=vad_speech_pad,
-            ),
+            options=chunk_options,
+            clip_spans=clip_spans,
         )
         result = {
             "text": chunk_result["text"],
@@ -258,6 +269,178 @@ class GraniteSpeechModel:
         resolved_target = target_language if target_language is not None else "en"
         validate_translation_pair(self.spec, language, resolved_target)
         return resolved_target
+
+
+def _transcribe_clip_spans(
+    wav: np.ndarray,
+    *,
+    backend: Backend,
+    sample_rate: int,
+    options: ChunkingOptions,
+    clip_spans: list[ClipSpan],
+) -> dict:
+    texts: list[str] = []
+    segments: list[dict] = []
+    warnings_: list[dict] = []
+    words: list[dict] = []
+    speakers: list[dict] = []
+
+    for span in clip_spans:
+        start_sample = round(span.start * sample_rate)
+        end_sample = round(span.end * sample_rate)
+        clipped_wav = wav[:, start_sample:end_sample]
+        chunk_result = transcribe_chunks(
+            clipped_wav,
+            backend=backend,
+            sample_rate=sample_rate,
+            options=options,
+        )
+        _offset_chunk_result(
+            chunk_result,
+            offset=span.start,
+            segment_id_offset=len(segments),
+        )
+        texts.append(chunk_result["text"])
+        segments.extend(chunk_result["segments"])
+        warnings_.extend(chunk_result["warnings"])
+        if "words" in chunk_result:
+            words.extend(chunk_result["words"])
+        if "speakers" in chunk_result:
+            speakers.extend(chunk_result["speakers"])
+
+    result = {
+        "text": join_text(texts),
+        "segments": segments,
+        "warnings": warnings_,
+    }
+    if options.prompt_mode == "word_timestamps" or words:
+        result["words"] = words
+    if options.prompt_mode == "speaker_attributed" or speakers:
+        result["speakers"] = speakers
+    return result
+
+
+def _offset_chunk_result(
+    chunk_result: dict,
+    *,
+    offset: float,
+    segment_id_offset: int,
+) -> None:
+    if offset == 0 and segment_id_offset == 0:
+        return
+
+    seen_timed_items: set[int] = set()
+    for segment_index, segment in enumerate(chunk_result.get("segments", [])):
+        segment["id"] = segment_id_offset + segment_index
+        _offset_timed_item(segment, offset=offset)
+        _offset_nested_timed_items(segment, offset=offset, seen=seen_timed_items)
+
+    for collection_name in ("words", "speakers"):
+        for item in chunk_result.get(collection_name, []):
+            _offset_timed_item(item, offset=offset, seen=seen_timed_items)
+
+    for warning in chunk_result.get("warnings", []):
+        if "id" in warning:
+            warning["id"] = segment_id_offset + int(warning["id"])
+        _offset_timed_item(warning, offset=offset)
+
+
+def _offset_nested_timed_items(item: dict, *, offset: float, seen: set[int]) -> None:
+    for collection_name in ("words", "speakers"):
+        for nested in item.get(collection_name, []):
+            _offset_timed_item(nested, offset=offset, seen=seen)
+
+
+def _offset_timed_item(item: dict, *, offset: float, seen: set[int] | None = None) -> None:
+    if seen is not None:
+        marker = id(item)
+        if marker in seen:
+            return
+        seen.add(marker)
+    for key in ("start", "end"):
+        value = item.get(key)
+        if isinstance(value, Real) and not isinstance(value, bool):
+            item[key] = float(value) + offset
+
+
+def _resolve_clip_spans(
+    clip_timestamps: str | Iterable[float] | Iterable[tuple[float, float]] | None,
+    *,
+    duration: float,
+) -> list[ClipSpan]:
+    if clip_timestamps is None:
+        return [ClipSpan(0.0, duration)]
+
+    points = _parse_clip_timestamp_points(clip_timestamps)
+    if not points:
+        raise InvalidArgumentError("clip_timestamps must contain at least one timestamp")
+    if points == [0.0]:
+        return [ClipSpan(0.0, duration)]
+
+    for previous, current in zip(points, points[1:], strict=False):
+        if current <= previous:
+            raise InvalidArgumentError("clip_timestamps must be strictly increasing")
+
+    spans: list[ClipSpan] = []
+    for index in range(0, len(points), 2):
+        start = points[index]
+        end = points[index + 1] if index + 1 < len(points) else duration
+        if start >= duration:
+            raise InvalidArgumentError(
+                f"clip_timestamps start {start:.3f}s is outside audio duration {duration:.3f}s"
+            )
+        end = min(end, duration)
+        if end <= start:
+            raise InvalidArgumentError("clip_timestamps clip end must be after clip start")
+        spans.append(ClipSpan(start, end))
+    return spans
+
+
+def _parse_clip_timestamp_points(
+    clip_timestamps: str | Iterable[float] | Iterable[tuple[float, float]],
+) -> list[float]:
+    if isinstance(clip_timestamps, str):
+        parts = clip_timestamps.split(",")
+        if any(not part.strip() for part in parts):
+            raise InvalidArgumentError("clip_timestamps must be a comma-separated list of seconds")
+        return [_coerce_clip_timestamp(part.strip()) for part in parts]
+
+    if isinstance(clip_timestamps, Real) and not isinstance(clip_timestamps, bool):
+        return [_coerce_clip_timestamp(clip_timestamps)]
+
+    try:
+        values = list(clip_timestamps)
+    except TypeError as exc:
+        raise InvalidArgumentError("clip_timestamps must be a string or iterable") from exc
+
+    points: list[float] = []
+    for value in values:
+        if isinstance(value, str):
+            points.append(_coerce_clip_timestamp(value))
+        elif isinstance(value, Iterable):
+            pair = list(value)
+            if len(pair) != 2:
+                raise InvalidArgumentError(
+                    "clip_timestamps iterable pairs must contain start and end"
+                )
+            points.extend(_coerce_clip_timestamp(part) for part in pair)
+        else:
+            points.append(_coerce_clip_timestamp(value))
+    return points
+
+
+def _coerce_clip_timestamp(value: Any) -> float:
+    if isinstance(value, bool):
+        raise InvalidArgumentError("clip_timestamps values must be numbers")
+    try:
+        timestamp = float(value)
+    except (TypeError, ValueError) as exc:
+        raise InvalidArgumentError("clip_timestamps values must be numbers") from exc
+    if not isfinite(timestamp):
+        raise InvalidArgumentError("clip_timestamps values must be finite")
+    if timestamp < 0:
+        raise InvalidArgumentError("clip_timestamps values must be greater than or equal to 0")
+    return timestamp
 
 
 def _resolve_whisper_compat_options(

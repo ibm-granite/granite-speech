@@ -53,6 +53,7 @@ def transcribe(
     initial_prompt: str | None = None,
     word_timestamps: bool | None = None,
     fp16: bool | None = None,
+    clip_timestamps: str | Iterable[float] | Iterable[tuple[float, float]] | None = None,
     **whisper_options: Any,
 ) -> dict:
     loaded = _get_cached_model(model)
@@ -80,6 +81,7 @@ def transcribe(
         initial_prompt=initial_prompt,
         word_timestamps=word_timestamps,
         fp16=fp16,
+        clip_timestamps=clip_timestamps,
         **whisper_options,
     )
 

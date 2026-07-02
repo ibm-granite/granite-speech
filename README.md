@@ -62,6 +62,7 @@ result = model.transcribe(
     chunk_length=30.0,
     chunk_overlap=0.0,
     segmentation="fixed",  # use "vad" to skip silence and cut on speech activity
+    clip_timestamps=None,  # e.g. "10,20" or "10,20,30,45" for selected ranges
 )
 
 print(result["text"])
@@ -124,6 +125,9 @@ The module-level convenience API is also available:
 result = granite_speech.transcribe("audio.wav")
 ```
 
+Migrating existing Whisper code? See the [porting guide](docs/porting-from-whisper.md) for the
+supported aliases and intentional differences.
+
 ## CLI
 
 ```bash
@@ -134,10 +138,14 @@ uv run granite-speech audio.wav --keyword "Granite Speech" --keyword watsonx.ai
 uv run granite-speech meeting.wav --model granite-speech-4.1-2b-plus --prompt_mode speaker_attributed
 uv run granite-speech meeting.wav --model granite-speech-4.1-2b-plus --prompt_mode word_timestamps --max_new_tokens 10000
 uv run granite-speech audio.wav --segmentation vad --chunk_length 30
+uv run granite-speech audio.wav --clip_timestamps 10,20
+uv run granite-speech audio.wav --output_format srt --max_line_width 42 --max_line_count 2
 uv run granite-speech audio.wav --output_format all --output_dir transcripts/
 ```
 
 Supported output formats are `txt`, `srt`, `vtt`, `tsv`, `json`, and `all`.
+For subtitle output, `--max_line_width` and `--max_line_count` wrap SRT/VTT cue text without
+changing TXT, TSV, or JSON output.
 
 Pass `keyword_biases=[...]` in Python or repeat `--keyword` in the CLI to use Granite Speech's
 keyword list biasing. The library renders the model-card prompt form, for example
@@ -152,6 +160,11 @@ For long recordings with substantial silence, pass `segmentation="vad"` in Pytho
 skip silent regions, pad detected speech, merge speech separated by short silences, and split any
 speech span longer than `chunk_length`. Tune it with `vad_threshold`, `vad_min_speech_duration`,
 `vad_min_silence_duration`, and `vad_speech_pad`.
+
+To transcribe selected regions, pass `clip_timestamps=` in Python or `--clip_timestamps` in the CLI
+as comma-separated seconds. Pairs select explicit ranges such as `10,20`; an odd final timestamp
+selects through the end of the file, such as `30` or `10,20,30`. Segment timestamps stay relative to
+the original audio file.
 
 Exit codes:
 

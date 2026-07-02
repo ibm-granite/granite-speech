@@ -73,6 +73,12 @@ def _transcribe_main(argv: list[str]) -> int:
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--word_timestamps", "--word-timestamps", action="store_true")
+    parser.add_argument(
+        "--clip_timestamps",
+        "--clip-timestamps",
+        default=None,
+        help="comma-separated clip boundaries in seconds, e.g. 10,20 or 10,20,30",
+    )
     parser.add_argument("--chunk_length", "--chunk-length", type=float, default=30.0)
     parser.add_argument("--chunk_overlap", "--chunk-overlap", type=float, default=0.0)
     parser.add_argument("--segmentation", choices=["fixed", "vad"], default="fixed")
@@ -97,6 +103,20 @@ def _transcribe_main(argv: list[str]) -> int:
         choices=sorted(OUTPUT_FORMATS),
     )
     parser.add_argument("--output_dir", "--output-dir", default=".")
+    parser.add_argument(
+        "--max_line_width",
+        "--max-line-width",
+        type=int,
+        default=None,
+        help="maximum subtitle line width for SRT/VTT output",
+    )
+    parser.add_argument(
+        "--max_line_count",
+        "--max-line-count",
+        type=int,
+        default=None,
+        help="maximum subtitle lines per cue for SRT/VTT output",
+    )
     args = parser.parse_args(argv)
     download_root = _resolve_download_root(args, parser)
 
@@ -136,6 +156,7 @@ def _transcribe_main(argv: list[str]) -> int:
                 temperature=args.temperature,
                 verbose=args.verbose,
                 word_timestamps=args.word_timestamps,
+                clip_timestamps=args.clip_timestamps,
                 chunk_length=args.chunk_length,
                 chunk_overlap=args.chunk_overlap,
                 segmentation=args.segmentation,
@@ -149,6 +170,8 @@ def _transcribe_main(argv: list[str]) -> int:
                 audio_path,
                 output_dir=args.output_dir,
                 output_format=args.output_format,
+                max_line_width=args.max_line_width,
+                max_line_count=args.max_line_count,
             )
             if _has_window_error(result):
                 per_file_code = 1

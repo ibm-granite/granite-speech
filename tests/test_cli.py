@@ -25,8 +25,16 @@ def test_cli_whisper_aliases_are_passed_to_transcribe(monkeypatch, tmp_path):
         captured["load_kwargs"] = kwargs
         return StubModel()
 
+    def fake_write_result(result, audio_path, **kwargs):
+        captured["write_result"] = {
+            "result": result,
+            "audio_path": audio_path,
+            "kwargs": kwargs,
+        }
+        return []
+
     monkeypatch.setattr(cli, "load_model", fake_load_model)
-    monkeypatch.setattr(cli, "write_result", lambda *args, **kwargs: [])
+    monkeypatch.setattr(cli, "write_result", fake_write_result)
 
     code = cli.main(
         [
@@ -36,8 +44,14 @@ def test_cli_whisper_aliases_are_passed_to_transcribe(monkeypatch, tmp_path):
             "--initial_prompt",
             "IBM Granite",
             "--word_timestamps",
+            "--clip_timestamps",
+            "1,2",
             "--output_format",
             "json",
+            "--max_line_width",
+            "42",
+            "--max_line_count",
+            "2",
         ]
     )
 
@@ -46,6 +60,9 @@ def test_cli_whisper_aliases_are_passed_to_transcribe(monkeypatch, tmp_path):
     assert captured["load_kwargs"]["download_root"] == str(tmp_path / "cache")
     assert captured["transcribe_kwargs"]["initial_prompt"] == "IBM Granite"
     assert captured["transcribe_kwargs"]["word_timestamps"] is True
+    assert captured["transcribe_kwargs"]["clip_timestamps"] == "1,2"
+    assert captured["write_result"]["kwargs"]["max_line_width"] == 42
+    assert captured["write_result"]["kwargs"]["max_line_count"] == 2
 
 
 def test_cli_rejects_conflicting_cache_aliases():

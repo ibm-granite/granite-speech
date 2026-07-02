@@ -116,6 +116,10 @@ def test_vad_silence_skips_backend_and_returns_empty_result():
         ({"segmentation": "vad", "vad_min_speech_duration": -0.1}, "vad_min_speech"),
         ({"segmentation": "vad", "vad_min_silence_duration": -0.1}, "vad_min_silence"),
         ({"segmentation": "vad", "vad_speech_pad": -0.1}, "vad_speech_pad"),
+        ({"clip_timestamps": "0,0"}, "clip_timestamps"),
+        ({"clip_timestamps": "0,,1"}, "clip_timestamps"),
+        ({"clip_timestamps": "0.8,0.7"}, "clip_timestamps"),
+        ({"clip_timestamps": "2,3"}, "clip_timestamps"),
     ],
 )
 def test_invalid_generation_and_chunking_arguments(kwargs, message):
@@ -228,7 +232,6 @@ def test_harmless_unsupported_whisper_options_warn_and_continue():
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"clip_timestamps": "10,20"},
         {"no_speech_threshold": 0.2},
         {"beam_size": 5},
         {"best_of": 5},
@@ -241,6 +244,51 @@ def test_transcript_affecting_unsupported_whisper_options_are_rejected(kwargs):
 
     with pytest.raises(InvalidArgumentError, match="unsupported"):
         model.transcribe(mono(1), sample_rate=16000, **kwargs)
+
+
+def test_clip_timestamps_transcribes_selected_ranges_with_original_offsets():
+    model = fake_model(["first clip", "second clip"])
+
+    result = model.transcribe(
+        mono(8, sample_rate=10),
+        sample_rate=10,
+        clip_timestamps="2,4,6,7",
+    )
+
+    assert result["text"] == "first clip second clip"
+    assert [(segment["id"], segment["start"], segment["end"]) for segment in result["segments"]] == [
+        (0, 2.0, 4.0),
+        (1, 6.0, 7.0),
+    ]
+    assert [call.wav.shape for call in model.backend.calls] == [(1, 32000), (1, 16000)]
+
+
+def test_clip_timestamps_offsets_backend_word_timestamps_once():
+    model = fake_model(
+        [
+            GenerateResult(
+                text="timed words",
+                words=[
+                    {"word": "timed", "start": 0.1, "end": 0.4},
+                    {"word": "words", "start": 0.4, "end": 0.9},
+                ],
+            )
+        ]
+    )
+
+    result = model.transcribe(
+        mono(10, sample_rate=10),
+        sample_rate=10,
+        clip_timestamps=[(5, 6)],
+    )
+
+    assert result["segments"][0]["start"] == 5.0
+    assert result["segments"][0]["end"] == 6.0
+    assert result["segments"][0]["words"] == [
+        {"word": "timed", "start": 5.1, "end": 5.4},
+        {"word": "words", "start": 5.4, "end": 5.9},
+    ]
+    assert result["words"] == result["segments"][0]["words"]
 
 
 def test_keyword_biases_use_translation_keyword_prompt():
