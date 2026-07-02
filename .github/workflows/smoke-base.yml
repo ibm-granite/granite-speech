@@ -1,0 +1,96 @@
+name: Real-weights smoke (base)
+
+# Manual-only. These smokes download the ~4.6 GB granite-speech-4.1-2b GGUF cache from Hugging
+# Face and run the full llama.cpp transcribe/translate path, so they are far too heavy and too
+# nondeterministic to gate every PR. Run on demand (e.g. before an alpha release) via the Actions
+# "Run workflow" button. The lightweight unit/lint/build gate lives in release-gates.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      llama_cpp_build:
+        description: >-
+          llama.cpp release build to download (e.g. b9860). Must be >= 9850 for parity with the
+          plus smoke; the base model works on older builds too.
+        required: false
+        default: "b9860"
+
+concurrency:
+  group: smoke-base-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-base:
+    name: granite-speech-4.1-2b smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Give llama_cpp / huggingface_hub a stable, cacheable home for the GGUF weights.
+      HF_HOME: ${{ github.workspace }}/.hf-home
+      LLAMA_CPP_BUILD: ${{ github.event.inputs.llama_cpp_build || 'b9860' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      # Download a prebuilt CPU llama.cpp release rather than building from source: the ubuntu-x64
+      # asset ships a ready llama-cli, so runs stay fast and we avoid a multi-minute compile.
+      - name: Cache llama.cpp binary
+        id: cache-llama
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.llama-cpp
+          key: llama-cpp-${{ env.LLAMA_CPP_BUILD }}-ubuntu-x64
+
+      - name: Download llama.cpp
+        if: steps.cache-llama.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ github.workspace }}/.llama-cpp"
+          asset="llama-${LLAMA_CPP_BUILD}-bin-ubuntu-x64.tar.gz"
+          echo "Downloading ${asset}"
+          gh release download "${LLAMA_CPP_BUILD}" \
+            --repo ggml-org/llama.cpp \
+            --pattern "${asset}" \
+            --output "${{ github.workspace }}/.llama-cpp/${asset}"
+          tar -xzf "${{ github.workspace }}/.llama-cpp/${asset}" -C "${{ github.workspace }}/.llama-cpp"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Put llama-cli on PATH
+        run: |
+          set -euo pipefail
+          bin_dir="$(dirname "$(find "${{ github.workspace }}/.llama-cpp" -name llama-cli -type f | head -n1)")"
+          if [ -z "${bin_dir}" ]; then
+            echo "::error::llama-cli not found in the downloaded llama.cpp release" >&2
+            exit 1
+          fi
+          echo "${bin_dir}" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=${bin_dir}:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: Verify llama-cli is present
+        run: |
+          set -euo pipefail
+          # Fail loudly if the binary is missing: the smokes skip() when llama-cli is absent, and a
+          # skip would make this manual run falsely green.
+          command -v llama-cli
+          llama-cli --version
+
+      # The GGUF cache is ~4.6 GB; cache it under HF_HOME so a re-run of the same model revision
+      # skips the download. The key is intentionally coarse (no lockfile hash) because the weights
+      # depend on the model, not on Python deps.
+      - name: Cache Hugging Face weights
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HF_HOME }}
+          key: hf-weights-granite-speech-4.1-2b
+
+      - name: Run base real-weights smoke
+        run: uv run pytest tests/test_real_weights_smoke.py -m real_weights -v
