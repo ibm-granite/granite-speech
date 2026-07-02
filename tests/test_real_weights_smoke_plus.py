@@ -21,10 +21,12 @@ PLUS_MODEL_NAME = "granite-speech-4.1-2b-plus"
 # override with GRANITE_SPEECH_PLUS_SMOKE_MIN_LLAMA_CPP_BUILD if an earlier fixed build is known.
 MIN_LLAMA_CPP_BUILD = 9850
 _LLAMA_CPP_VERSION_RE = re.compile(r"version:\s*(\d+)")
-SMOKE_AUDIO_REPO_ID = "ibm-granite/granite-speech-4.1-2b"
-SMOKE_AUDIO_FILENAME = "multilingual_sample.wav"
-SMOKE_AUDIO_REVISION = "de575db64086f84fdc79da4932d1076e965bc546"
-SMOKE_AUDIO_SHA256 = "91d243650809c1274141ec20ff23045315eaf27567694002ea3ef390048b7058"
+# The plus model card exercises all four tasks against the AMI meeting clip (sample 0, the 5:00-6:00
+# window of the ihm test split). It is genuinely multi-speaker, so it drives speaker attribution and
+# incremental decoding faithfully. Unlike the base smoke's multilingual_sample.wav, this clip is not
+# hosted in a HF model repo; regenerate it with scripts/fetch_ami_smoke_audio.py.
+SMOKE_AUDIO_FILENAME = "ami_ihm_sample0_5m-6m.wav"
+SMOKE_AUDIO_SHA256 = "e248864aa8ac4fb145a874ef8efe86c6278dcb584f91989e8693c0f81df61ff4"
 LOCAL_SMOKE_AUDIO_PATH = Path(__file__).with_name("fixtures") / SMOKE_AUDIO_FILENAME
 
 
@@ -48,10 +50,7 @@ def smoke_context():
         )
     _skip_if_llama_cpp_too_old(binary)
 
-    audio_path = _smoke_audio_path(
-        cache_dir=load_kwargs.get("download_root"),
-        local_files_only=bool(load_kwargs.get("local_files_only")),
-    )
+    audio_path = _smoke_audio_path()
     return load_kwargs, audio_path
 
 
@@ -107,13 +106,54 @@ def test_plus_model_speaker_attribution_real_weights_smoke(smoke_model, smoke_au
     )
 
     _assert_successful_smoke_result(result)
-    # The multilingual fixture is not guaranteed to contain multiple speakers, so assert on the
-    # shape of the speaker-attribution output rather than a distinct-speaker count.
     assert "speakers" in result
     for turn in result["speakers"]:
         assert set(turn) >= {"speaker", "text"}
         assert turn["speaker"].strip()
         assert turn["text"].strip()
+    # The AMI clip is genuinely multi-speaker, so speaker attribution should surface at least two
+    # distinct speaker labels.
+    distinct_speakers = {turn["speaker"] for turn in result["speakers"]}
+    assert len(distinct_speakers) >= 2, f"expected multiple speakers, got {distinct_speakers}"
+
+
+def test_plus_model_incremental_decoding_real_weights_smoke(smoke_model, smoke_audio_path):
+    # Mirror the model card's incremental loop: transcribe an early window, then transcribe a later
+    # cumulative window while passing the earlier transcript as prefix_text so speaker numbering
+    # stays consistent across segments.
+    seed = _transcribe_without_package_warnings(
+        smoke_model,
+        smoke_audio_path,
+        prompt_mode="speaker_attributed",
+        clip_timestamps="0,30",
+    )
+    _assert_successful_smoke_result(seed)
+    assert seed["text"].strip()
+
+    continued = _transcribe_without_package_warnings(
+        smoke_model,
+        smoke_audio_path,
+        prompt_mode="speaker_attributed",
+        clip_timestamps="0,60",
+        prefix_text=seed["text"],
+    )
+
+    _assert_successful_smoke_result(continued)
+    assert "speakers" in continued
+    for turn in continued["speakers"]:
+        assert set(turn) >= {"speaker", "text"}
+        assert turn["speaker"].strip()
+        assert turn["text"].strip()
+
+    # Speaker numbering should carry over from the prefix rather than restart: the continued run's
+    # speaker labels should overlap the seed's, not be a disjoint relabeling. Exact transcript text
+    # is nondeterministic, so assert on label-set overlap rather than content.
+    seed_speakers = {turn["speaker"] for turn in seed.get("speakers", [])}
+    continued_speakers = {turn["speaker"] for turn in continued["speakers"]}
+    if seed_speakers:
+        assert seed_speakers & continued_speakers, (
+            f"expected continued speakers {continued_speakers} to overlap seed {seed_speakers}"
+        )
 
 
 def _transcribe_without_package_warnings(model, audio_path: Path, **kwargs) -> dict:
@@ -131,7 +171,7 @@ def _assert_successful_smoke_result(result: dict) -> None:
     assert result["text"].strip()
 
 
-def _smoke_audio_path(*, cache_dir: str | None, local_files_only: bool) -> Path:
+def _smoke_audio_path() -> Path:
     value = os.environ.get("GRANITE_SPEECH_PLUS_SMOKE_AUDIO")
     if value:
         path = Path(value).expanduser()
@@ -139,41 +179,17 @@ def _smoke_audio_path(*, cache_dir: str | None, local_files_only: bool) -> Path:
             pytest.fail(f"GRANITE_SPEECH_PLUS_SMOKE_AUDIO does not exist: {path}")
         return path
 
-    if (
-        os.environ.get("GRANITE_SPEECH_PLUS_SMOKE_AUDIO_REVISION") is None
-        and LOCAL_SMOKE_AUDIO_PATH.exists()
-    ):
-        expected_sha = os.environ.get(
-            "GRANITE_SPEECH_PLUS_SMOKE_AUDIO_SHA256", SMOKE_AUDIO_SHA256
+    # The AMI clip is committed under tests/fixtures/ rather than fetched from a HF model repo, so
+    # require the local fixture instead of falling back to a download.
+    if not LOCAL_SMOKE_AUDIO_PATH.exists():
+        pytest.fail(
+            f"plus smoke audio fixture is missing: {LOCAL_SMOKE_AUDIO_PATH}. Regenerate it with "
+            "scripts/fetch_ami_smoke_audio.py, or point GRANITE_SPEECH_PLUS_SMOKE_AUDIO at a clip."
         )
-        if expected_sha:
-            _assert_sha256(LOCAL_SMOKE_AUDIO_PATH, expected_sha)
-        return LOCAL_SMOKE_AUDIO_PATH
-
-    try:
-        from huggingface_hub import hf_hub_download
-    except Exception as exc:
-        raise AssertionError(
-            "huggingface_hub is required to download the default smoke audio"
-        ) from exc
-
-    revision = os.environ.get("GRANITE_SPEECH_PLUS_SMOKE_AUDIO_REVISION", SMOKE_AUDIO_REVISION)
-    path = Path(
-        hf_hub_download(
-            repo_id=SMOKE_AUDIO_REPO_ID,
-            filename=SMOKE_AUDIO_FILENAME,
-            revision=revision,
-            cache_dir=cache_dir,
-            local_files_only=local_files_only,
-        )
-    )
-    expected_sha = os.environ.get(
-        "GRANITE_SPEECH_PLUS_SMOKE_AUDIO_SHA256",
-        SMOKE_AUDIO_SHA256 if revision == SMOKE_AUDIO_REVISION else "",
-    )
+    expected_sha = os.environ.get("GRANITE_SPEECH_PLUS_SMOKE_AUDIO_SHA256", SMOKE_AUDIO_SHA256)
     if expected_sha:
-        _assert_sha256(path, expected_sha)
-    return path
+        _assert_sha256(LOCAL_SMOKE_AUDIO_PATH, expected_sha)
+    return LOCAL_SMOKE_AUDIO_PATH
 
 
 def _is_package_warning(filename: str) -> bool:
