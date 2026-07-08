@@ -1,0 +1,77 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "granite-speech"
+dynamic = ["version"]
+description = "A Whisper-like Python library for IBM Granite Speech models."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  { name = "IBM Granite Speech contributors" },
+]
+keywords = ["speech-to-text", "asr", "granite", "transformers", "llama.cpp", "whisper"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+  "torch>=2.2",
+  "torchaudio>=2.2",
+  "soundfile>=0.12.1",
+  "huggingface_hub>=0.23",
+  "numpy>=1.24",
+  "tqdm>=4.66",
+  "packaging>=23",
+]
+
+[project.optional-dependencies]
+# Reserved for future use: the transformers backend is not yet reachable from
+# load_model(). Install with `granite-speech[transformers]` once a model that
+# requires it ships.
+transformers = [
+  "transformers>=5.8",
+  "peft>=0.11",
+  "safetensors>=0.4.3",
+]
+dev = [
+  "pytest>=8",
+  "ruff>=0.5",
+  "twine>=6.2.0",
+]
+mlx = [
+  "mlx-audio",
+]
+
+[project.scripts]
+granite-speech = "granite_speech.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ibm-granite/granite-speech"
+
+[tool.setuptools.packages.find]
+include = ["granite_speech*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "granite_speech.version.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "real_weights: opt-in smoke tests that download or load real Granite Speech model weights",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]

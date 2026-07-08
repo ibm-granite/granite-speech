@@ -1,0 +1,64 @@
+name: Publish to PyPI
+
+# Publishes the sdist/wheel to real PyPI (https://pypi.org) when a GitHub
+# Release is published. Draft/tag the release in the Releases UI; publishing it
+# triggers the build + upload. Smoke-test on Test PyPI first via
+# publish-testpypi.yml.
+#
+# Auth: set a PyPI API token as the repository secret PYPI_API_TOKEN (create it
+# at https://pypi.org/manage/account/token/). To migrate to Trusted Publishing
+# (OIDC) later: register a Trusted Publisher for this repo/workflow on PyPI,
+# delete the `with:` block below, add `permissions: id-token: write` to the job,
+# and remove the PYPI_API_TOKEN secret.
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: publish-pypi
+  cancel-in-progress: false
+
+jobs:
+  publish-pypi:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      # Fail fast if the release tag doesn't match the version in
+      # granite_speech/version.py. The tag is the human-entered value from the
+      # GitHub Release; strip an optional leading "v" (v0.0.3 -> 0.0.3) before
+      # comparing. This stops a desynced release from ever reaching PyPI.
+      - name: Verify tag matches package version
+        env:
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          tag_version="${TAG_NAME#v}"
+          pkg_version="$(uv run python -c 'from granite_speech.version import __version__; print(__version__)')"
+          echo "Release tag:     $TAG_NAME (normalized: $tag_version)"
+          echo "Package version: $pkg_version"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::Release tag '$TAG_NAME' does not match granite_speech/version.py ('$pkg_version'). Bump version.py to match the tag, or retag."
+            exit 1
+          fi
+
+      - name: Build artifacts
+        run: uv build
+
+      - name: Check package metadata
+        run: uv run twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

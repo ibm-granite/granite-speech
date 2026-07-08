@@ -1,0 +1,105 @@
+name: Real-weights smoke (plus)
+
+# Manual-only, separate from the base smoke so the two multi-GB model caches never share a run.
+# granite-speech-4.1-2b-plus adds word-timestamp and speaker-attribution output and requires
+# llama.cpp build >= 9850 (PR #24818); earlier builds crash encoding the plus audio features. Run
+# on demand via the Actions "Run workflow" button. The lightweight PR gate lives in
+# release-gates.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      llama_cpp_build:
+        description: >-
+          llama.cpp release build to download (e.g. b9860). Must be >= 9850 for plus support.
+        required: false
+        default: "b9860"
+
+concurrency:
+  group: smoke-plus-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-plus:
+    name: granite-speech-4.1-2b-plus smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HF_HOME: ${{ github.workspace }}/.hf-home
+      LLAMA_CPP_BUILD: ${{ github.event.inputs.llama_cpp_build || 'b9860' }}
+      # Do not let the smoke silently skip on an old build: if the downloaded release predates the
+      # plus support floor, that is a workflow-input mistake we want surfaced as a failure. The
+      # verify step below hard-checks the build number.
+      GRANITE_SPEECH_PLUS_SMOKE_MIN_LLAMA_CPP_BUILD: "9850"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Cache llama.cpp binary
+        id: cache-llama
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.llama-cpp
+          key: llama-cpp-${{ env.LLAMA_CPP_BUILD }}-ubuntu-x64
+
+      - name: Download llama.cpp
+        if: steps.cache-llama.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ github.workspace }}/.llama-cpp"
+          asset="llama-${LLAMA_CPP_BUILD}-bin-ubuntu-x64.tar.gz"
+          echo "Downloading ${asset}"
+          gh release download "${LLAMA_CPP_BUILD}" \
+            --repo ggml-org/llama.cpp \
+            --pattern "${asset}" \
+            --output "${{ github.workspace }}/.llama-cpp/${asset}"
+          tar -xzf "${{ github.workspace }}/.llama-cpp/${asset}" -C "${{ github.workspace }}/.llama-cpp"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Put llama-cli on PATH
+        run: |
+          set -euo pipefail
+          bin_dir="$(dirname "$(find "${{ github.workspace }}/.llama-cpp" -name llama-cli -type f | head -n1)")"
+          if [ -z "${bin_dir}" ]; then
+            echo "::error::llama-cli not found in the downloaded llama.cpp release" >&2
+            exit 1
+          fi
+          echo "${bin_dir}" >> "$GITHUB_PATH"
+          echo "LD_LIBRARY_PATH=${bin_dir}:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: Verify llama-cli meets the plus build floor
+        run: |
+          set -euo pipefail
+          command -v llama-cli
+          version_output="$(llama-cli --version 2>&1)"
+          echo "${version_output}"
+          # Fail loudly rather than let the smoke skip(): a skip on a too-old build would make this
+          # manual run falsely green.
+          build="$(echo "${version_output}" | grep -oE 'version:[[:space:]]*[0-9]+' | grep -oE '[0-9]+' | head -n1)"
+          if [ -z "${build}" ]; then
+            echo "::error::could not parse llama.cpp build from --version output" >&2
+            exit 1
+          fi
+          if [ "${build}" -lt "${GRANITE_SPEECH_PLUS_SMOKE_MIN_LLAMA_CPP_BUILD}" ]; then
+            echo "::error::llama.cpp build ${build} predates plus support (need >= ${GRANITE_SPEECH_PLUS_SMOKE_MIN_LLAMA_CPP_BUILD}); pick a newer llama_cpp_build input" >&2
+            exit 1
+          fi
+
+      - name: Cache Hugging Face weights
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.HF_HOME }}
+          key: hf-weights-granite-speech-4.1-2b-plus
+
+      - name: Run plus real-weights smoke
+        # -s so the transcription output (text/segments/speakers/words) shows in the Actions log.
+        run: uv run pytest tests/test_real_weights_smoke_plus.py -m real_weights -v -s

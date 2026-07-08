@@ -1,0 +1,18 @@
+[project]
+name = "granite-speech-pipecat-live-audio-example"
+version = "0.1.0"
+description = "Live microphone transcription with Granite Speech and Pipecat."
+requires-python = ">=3.11"
+dependencies = [
+  "granite-speech",
+  "fastapi>=0.115.6,<1",
+  "pipecat-ai[webrtc]>=1.4,<2",
+  "pipecat-ai-small-webrtc-prebuilt>=2.4,<3",
+  "uvicorn>=0.32,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+granite-speech = { path = "..", editable = true }
