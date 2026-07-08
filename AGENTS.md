@@ -4,20 +4,29 @@
 
 `granite_speech/` contains the package source and the `granite-speech` CLI. Public entry points live
 in `__init__.py`, `model.py`, `loader.py`, `cli.py`, and `types.py`; keep stable API behavior there.
-Model aliases and capability metadata are centralized in `_models.py`. Audio loading, clipping,
-chunking, VAD segmentation, reconciliation, prompt rendering, plus-model output parsing, cache
-resolution, and output writers are split across their matching modules.
+Model aliases and capability metadata are centralized in `_models.py`, and `errors.py` holds the
+public exception hierarchy (`GraniteSpeechError`, `InvalidArgumentError`). Audio loading and
+clipping (`audio.py`), chunking (`chunking.py`), VAD segmentation (`segmenter.py`), reconciliation
+(`reconciliation.py`), prompt rendering (`prompts.py`), plus-model output parsing
+(`plus_output.py`), cache resolution (`cache.py`), and output writers (`writers.py`) each live in
+their matching module.
+`version.py` holds `__version__`, which `pyproject.toml` reads as the dynamic package version and
+`publish-pypi.yml` verifies against the release git tag.
 
 Backend-specific code belongs in `granite_speech/_backends/`. The active default loader path is
-llama.cpp/GGUF via `_backends/llama_cpp.py`; `_backends/transformers.py` is reserved for future
-models and is not currently reachable from `load_model()`. Use `_backends/fake.py` for deterministic
-tests.
+llama.cpp/GGUF via `_backends/llama_cpp.py`; `_backends/transformers.py` is wired into `loader.py`
+but reserved for future models and not selected by `load_model()`. Use `_backends/fake.py` for
+deterministic tests. The `mlx` optional extra (`mlx-audio`) is declared in `pyproject.toml` but
+reserved: there is no MLX backend yet.
 
 Tests live in `tests/` and mirror behavior areas: audio, chunking, segmentation, reconciliation,
-writers, CLI, model registry/cache handling, Whisper compatibility, model-card prompts, plus output,
-and llama.cpp backend command construction. Opt-in real-weight smoke tests are marked
-`real_weights`. Docs live in `README.md` and `docs/`; optional integrations and model-card examples
-live in `examples/`, which has its own `pyproject.toml`.
+writers, CLI, model registry/cache handling, Whisper compatibility, model-card prompts, README
+examples, `types.py` shapes, fake-backend model behavior, plus output, and llama.cpp backend command
+construction. Opt-in real-weight smoke tests are marked `real_weights`. Committed fixtures live under
+`tests/fixtures/` (`multilingual_sample.wav` for the base smoke, `ami_ihm_sample0_5m-6m.wav` for the
+plus smoke; see `tests/fixtures/README.md`). Docs live in `README.md` and `docs/`
+(`docs/release-checks.md`, `docs/porting-from-whisper.md`); optional integrations and model-card
+examples live in `examples/`, which has its own `pyproject.toml` and pinned `uv.lock`.
 
 ## Build, Test, and Development Commands
 
@@ -37,14 +46,26 @@ Use `uv` for all Python commands: run tools and scripts through `uv run` (e.g. `
 - `scripts/smoke-testpypi.sh [version]`: install the published Test PyPI build into a temporary venv
   (deps resolve from real PyPI) and run the base + plus real-weights smoke tests against it. Requires
   `llama-cli` (build >= 9850 for the plus suite); set `GRANITE_SPEECH_SMOKE_SUITE=base|plus` to narrow.
+- `scripts/fetch_ami_smoke_audio.py`: regenerate the committed AMI plus-smoke fixture
+  `tests/fixtures/ami_ihm_sample0_5m-6m.wav`; run only when refreshing that fixture.
 - `uv run granite-speech audio.wav --output_format txt`: exercise the CLI from the checkout.
 - `uv run granite-speech download granite-speech-4.1-2b --llama_cpp_quant Q4_K_M`: prefetch GGUF
   model and mmproj files for offline or container use.
 
 Real-weight smoke tests require `llama-cli` and multi-GB model downloads. Run them only when needed,
 for example `uv run pytest tests/test_real_weights_smoke.py -m real_weights` or
-`uv run pytest tests/test_real_weights_smoke_plus.py -m real_weights`. See `docs/release-checks.md`
-for cache, binary, revision, timeout, and expected-text environment overrides.
+`uv run pytest tests/test_real_weights_smoke_plus.py -m real_weights`. The plus suite skips (rather
+than fails) on llama.cpp builds older than `9850`; override with
+`GRANITE_SPEECH_PLUS_SMOKE_MIN_LLAMA_CPP_BUILD`. See `docs/release-checks.md` for the full set of
+`GRANITE_SPEECH_SMOKE_*` / `GRANITE_SPEECH_PLUS_SMOKE_*` cache, binary, revision, timeout, and
+expected-text environment overrides.
+
+CI lives in `.github/workflows/`. `release-gates.yml` is the release gate that runs
+`uv run pytest -m "not real_weights"`, `uv run ruff check .`, `uv build`, and
+`uv run twine check dist/*`. `smoke-base.yml` and `smoke-plus.yml` are manual real-weights smoke
+runs (`smoke-plus.yml` enforces the `>= 9850` llama.cpp build floor). `publish-testpypi.yml` and
+`publish-pypi.yml` build and upload releases; `publish-pypi.yml` verifies the git tag matches
+`granite_speech.version.__version__`.
 
 For the Pipecat example, run `cd examples && uv sync`, then
 `uv run python live_audio_pipecat.py`. Pipecat requires Python 3.11 or newer.
@@ -57,10 +78,21 @@ Use Python 3.10-compatible syntax, 4-space indentation, and Ruff's configured
 native underscore options may have hyphen aliases, and Whisper migration aliases should remain
 explicitly tested.
 
+The CLI (`cli.py`) largely mirrors the `transcribe()` kwargs: a default transcribe path and a
+`download` subcommand, plus segmentation controls (`--segmentation {fixed,vad}` and the `--vad_*`
+tuning options), prompt/output controls (`--prompt_mode`, `--prefix_text`, `--keyword`/
+`--keyword_bias`, `--clip_timestamps`, `--word_timestamps`, `--output_format`, subtitle
+`--max_line_width`/`--max_line_count`), and llama.cpp passthrough (`--llama_cpp_binary`,
+`--llama_cpp_quant`, `--llama_cpp_mmproj`, repeatable `--llama_cpp_arg`, `--llama_cpp_timeout`).
+`--model_dir` and `--download_root` are mutually exclusive. The CLI uses per-file exit codes
+(0 success, 1 partial/window errors, 2 usage) with a warning summary; keep that behavior covered
+when changing CLI output.
+
 Keep model capability rules in `_models.py` rather than scattering model-name checks through the
-code. The base model supports ASR and validated translation pairs; the plus model supports ASR,
-speaker-attributed output, word timestamp output, and `prefix_text`, but not translation. The
-default llama.cpp quantization is `Q4_K_M`.
+code. The default model is the base `granite-speech-4.1-2b`, which supports ASR and validated
+translation pairs (source languages `en, fr, de, es, pt, ja`). The plus model supports ASR,
+speaker-attributed output, word timestamp output, and `prefix_text`, but not translation, and has a
+narrower source-language set (`en, fr, de, es, pt`). The default llama.cpp quantization is `Q4_K_M`.
 
 Preserve model-card prompt compatibility in `prompts.py` and `examples/model_card_examples.md`.
 The plus system prompt contains fixed training-time dates; do not update them to the current date.
