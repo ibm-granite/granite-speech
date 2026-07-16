@@ -1,3 +1,6 @@
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Typed shapes for the public transcription result.
 
 These ``TypedDict``s document the result returned by :func:`granite_speech.transcribe`
