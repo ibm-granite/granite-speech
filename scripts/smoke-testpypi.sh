@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 set -euo pipefail
 
 # Run the real-weights smoke tests (base + plus) against the granite-speech

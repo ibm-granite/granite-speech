@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Regenerate the AMI smoke-test fixture used by the plus-model real-weights smoke.
 
 This reproduces the example-audio selection from the granite-speech-4.1-2b-plus model card

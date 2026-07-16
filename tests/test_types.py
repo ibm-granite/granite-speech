@@ -1,3 +1,6 @@
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Drift guard for the public result TypedDicts (`granite_speech/types.py`).
 
 No type checker runs in CI (only ruff, which does not validate TypedDict

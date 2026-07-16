@@ -1,3 +1,6 @@
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 class GraniteSpeechError(Exception):
     """Base class for exceptions raised by granite-speech."""
 
