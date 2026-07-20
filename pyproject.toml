@@ -24,7 +24,7 @@ classifiers = [
   "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
 dependencies = [
-  "torch>=2.2",
+  "torch>=2.13.0",
   "torchaudio>=2.2",
   "soundfile>=0.12.1",
   "huggingface_hub>=0.23",
